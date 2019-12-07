@@ -1,0 +1,10 @@
+{
+  "domain": "climate_template",
+  "name": "Climate Template",
+  "documentation": "https://github.com/jcwillox/hass-template-climate",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [
+    "@jcwillox"
+  ]
+}
