@@ -5,7 +5,7 @@ import logging
 import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
-from homeassistant.components.climate import ClimateDevice, ENTITY_ID_FORMAT
+from homeassistant.components.climate import ClimateEntity, ENTITY_ID_FORMAT
 from homeassistant.components.climate.const import (
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
@@ -117,7 +117,7 @@ async def async_setup_platform(
     async_add_entities([TemplateClimate(hass, config)])
 
 
-class TemplateClimate(ClimateDevice, RestoreEntity):
+class TemplateClimate(ClimateEntity, RestoreEntity):
     """A template climate component."""
 
     def __init__(self, hass: HomeAssistantType, config: ConfigType):
