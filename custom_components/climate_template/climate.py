@@ -2,9 +2,8 @@
 
 import logging
 
-import voluptuous as vol
-
 import homeassistant.helpers.config_validation as cv
+import voluptuous as vol
 from homeassistant.components.climate import ClimateEntity, ENTITY_ID_FORMAT
 from homeassistant.components.climate.const import (
     DEFAULT_MAX_TEMP,
@@ -36,19 +35,19 @@ from homeassistant.components.mqtt.climate import (
     CONF_TEMP_STEP,
 )
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
+from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.const import (
     STATE_ON,
     PRECISION_HALVES,
     PRECISION_TENTHS,
     PRECISION_WHOLE,
     ATTR_TEMPERATURE,
-    EVENT_HOMEASSISTANT_START,
     CONF_NAME,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
+    CONF_ICON_TEMPLATE,
+    CONF_ENTITY_PICTURE_TEMPLATE,
 )
-from homeassistant.core import callback
-from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
@@ -69,11 +68,14 @@ CONF_CLIMATES = "climates"
 DEFAULT_NAME = "Template Climate"
 DEFAULT_TEMP = 21
 DEFAULT_PRECISION = 1.0
+DOMAIN = "climate_template"
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
+        vol.Optional(CONF_ICON_TEMPLATE): cv.template,
+        vol.Optional(CONF_ENTITY_PICTURE_TEMPLATE): cv.template,
         vol.Optional(CONF_CURRENT_TEMP_TEMPLATE): cv.template,
         vol.Optional(CONF_CURRENT_HUMIDITY_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
@@ -117,12 +119,18 @@ async def async_setup_platform(
     async_add_entities([TemplateClimate(hass, config)])
 
 
-class TemplateClimate(ClimateEntity, RestoreEntity):
+class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     """A template climate component."""
 
     def __init__(self, hass: HomeAssistantType, config: ConfigType):
         """Initialize the climate device."""
+        super().__init__(
+            availability_template=config.get(CONF_AVAILABILITY_TEMPLATE),
+            icon_template=config.get(CONF_ICON_TEMPLATE),
+            entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
+        )
         self._config = config
+        self._name = self._config[CONF_NAME]
 
         self._current_temp = None
         self._current_humidity = None
@@ -135,7 +143,6 @@ class TemplateClimate(ClimateEntity, RestoreEntity):
         self._current_temp_template = config.get(CONF_CURRENT_TEMP_TEMPLATE)
         self._current_humidity_template = config.get(CONF_CURRENT_HUMIDITY_TEMPLATE)
         self._swing_mode_template = config.get(CONF_SWING_MODE_TEMPLATE)
-        self._availability_template = config.get(CONF_AVAILABILITY_TEMPLATE)
 
         self._available = True
         self._unit_of_measurement = hass.config.units.temperature_unit
@@ -153,61 +160,37 @@ class TemplateClimate(ClimateEntity, RestoreEntity):
         self._set_hvac_mode_script = None
         set_hvac_mode_action = config.get(CONF_SET_HVAC_MODE_ACTION)
         if set_hvac_mode_action:
-            self._set_hvac_mode_script = Script(hass, set_hvac_mode_action)
+            self._set_hvac_mode_script = Script(
+                hass, set_hvac_mode_action, self._name, DOMAIN
+            )
 
         self._set_swing_mode_script = None
         set_swing_mode_action = config.get(CONF_SET_SWING_MODE_ACTION)
         if set_swing_mode_action:
-            self._set_swing_mode_script = Script(hass, set_swing_mode_action)
+            self._set_swing_mode_script = Script(
+                hass, set_swing_mode_action, self._name, DOMAIN
+            )
             self._supported_features |= SUPPORT_SWING_MODE
 
         self._set_fan_mode_script = None
         set_fan_mode_action = config.get(CONF_SET_FAN_MODE_ACTION)
         if set_fan_mode_action:
-            self._set_fan_mode_script = Script(hass, set_fan_mode_action)
+            self._set_fan_mode_script = Script(
+                hass, set_fan_mode_action, self._name, DOMAIN
+            )
             self._supported_features |= SUPPORT_FAN_MODE
 
         self._set_temperature_script = None
         set_temperature_action = config.get(CONF_SET_TEMPERATURE_ACTION)
         if set_temperature_action:
-            self._set_temperature_script = Script(hass, set_temperature_action)
+            self._set_temperature_script = Script(
+                hass, set_temperature_action, self._name, DOMAIN
+            )
             self._supported_features |= SUPPORT_TARGET_TEMPERATURE
-
-        # set template's hass object and extract entities
-        self._entities = set()
-        for template in (
-            self._current_temp_template,
-            self._current_humidity_template,
-            self._swing_mode_template,
-            self._availability_template,
-        ):
-            if template is not None:
-                template.hass = hass
-                template_entity_ids = template.extract_entities()
-                self._entities |= set(template_entity_ids)
 
     async def async_added_to_hass(self):
         """Run when entity about to be added."""
         await super().async_added_to_hass()
-
-        # Add listeners
-        @callback
-        def template_climate_state_listener(entity, old_state, new_state):
-            """Handle target device state changes."""
-            self.async_schedule_update_ha_state(True)
-
-        @callback
-        def template_climate_startup(event):
-            """Update template on startup."""
-            self.hass.helpers.event.async_track_state_change(
-                self._entities, template_climate_state_listener
-            )
-
-            self.async_schedule_update_ha_state(True)
-
-        self.hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_START, template_climate_startup
-        )
 
         # Check If we have an old state
         previous_state = await self.async_get_last_state()
@@ -233,90 +216,65 @@ class TemplateClimate(ClimateEntity, RestoreEntity):
                     ATTR_CURRENT_HUMIDITY
                 )
 
-    async def async_update(self):
-        """Update the state from the template."""
-        # Update current temperature
-        if self._current_temp_template is not None:
+        # register templates
+        if self._current_temp_template:
+            self.add_template_attribute(
+                "_current_temp",
+                self._current_temp_template,
+                None,
+                self._update_current_temp,
+                none_on_template_error=True,
+            )
+
+        if self._current_humidity_template:
+            self.add_template_attribute(
+                "_current_humidity",
+                self._current_humidity_template,
+                None,
+                self._update_current_humidity,
+                none_on_template_error=True,
+            )
+
+        if self._swing_mode_template:
+            self.add_template_attribute(
+                "_current_swing_mode",
+                self._swing_mode_template,
+                None,
+                self._update_swing_mode,
+                none_on_template_error=True,
+            )
+
+    def _update_current_temp(self, temp):
+        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
-                current_temperature = self._current_temp_template.async_render()
-            except TemplateError as ex:
-                _LOGGER.error(ex)
-                current_temperature = None
-                self._current_temp = None
+                self._current_temp = float(temp)
+            except ValueError:
+                _LOGGER.error("Could not parse temperature from %s", temp)
 
-            if current_temperature not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                try:
-                    self._current_temp = float(current_temperature)
-                except ValueError:
-                    _LOGGER.error(
-                        "Could not parse temperature from %s", current_temperature
-                    )
-
-        # Update current humidity
-        if self._current_humidity_template is not None:
+    def _update_current_humidity(self, humidity):
+        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
-                current_humidity = self._current_humidity_template.async_render()
-            except TemplateError as ex:
-                _LOGGER.error(ex)
-                current_humidity = None
-                self._current_humidity = None
+                self._current_humidity = float(humidity)
+            except ValueError:
+                _LOGGER.error("Could not parse humidity from %s", humidity)
 
-            if current_humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                try:
-                    self._current_humidity = float(current_humidity)
-                except ValueError:
-                    _LOGGER.error("Could not parse humidity from %s", current_humidity)
-
-        # Update swing mode
-        if self._swing_mode_template is not None:
-            try:
-                swing_mode = self._swing_mode_template.async_render()
-            except TemplateError as ex:
-                _LOGGER.error(ex)
-                swing_mode = None
-                self._current_swing_mode = None
-
-            # Validate swing mode
-            if swing_mode in self._swing_modes_list:
-                # check swing mode actually changed
-                if self._current_swing_mode != swing_mode:
-                    self._current_swing_mode = swing_mode
-                    await self.async_set_swing_mode(swing_mode)
-            elif swing_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                _LOGGER.error(
-                    "Received invalid swing mode: %s. Expected: %s.",
-                    swing_mode,
-                    self._swing_modes_list,
-                )
-
-        # Update Availability if 'availability_template' is defined
-        if self._availability_template is not None:
-            try:
-                self._available = (
-                    self._availability_template.async_render().lower() == "true"
-                )
-            except (TemplateError, ValueError) as ex:
-                _LOGGER.error(
-                    "Could not render %s template %s: %s",
-                    CONF_AVAILABILITY_TEMPLATE,
-                    self.name,
-                    ex,
-                )
-
-    @property
-    def should_poll(self):
-        """Return the polling state."""
-        return False
-
-    @property
-    def available(self):
-        """Return availability of Device."""
-        return self._available
+    def _update_swing_mode(self, swing_mode):
+        if swing_mode in self._swing_modes_list:
+            # check swing mode actually changed
+            if self._current_swing_mode != swing_mode:
+                self._current_swing_mode = swing_mode
+                self.hass.async_create_task(self.async_set_swing_mode(swing_mode))
+        elif swing_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            _LOGGER.error(
+                "Received invalid swing mode: %s. Expected: %s.",
+                swing_mode,
+                self._swing_modes_list,
+            )
 
     @property
     def name(self):
         """Return the name of the climate device."""
-        return self._config[CONF_NAME]
+        return self._name
 
     @property
     def supported_features(self) -> int:
