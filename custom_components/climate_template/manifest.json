@@ -1,4 +1,5 @@
 {
+  "version": "0.1.0",
   "domain": "climate_template",
   "name": "Climate Template",
   "documentation": "https://github.com/jcwillox/hass-template-climate",
