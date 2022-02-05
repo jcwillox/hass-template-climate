@@ -125,6 +125,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def __init__(self, hass: HomeAssistantType, config: ConfigType):
         """Initialize the climate device."""
         super().__init__(
+            hass,
             availability_template=config.get(CONF_AVAILABILITY_TEMPLATE),
             icon_template=config.get(CONF_ICON_TEMPLATE),
             entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
