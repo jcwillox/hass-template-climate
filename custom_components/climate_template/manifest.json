@@ -1,11 +1,11 @@
 {
-  "version": "0.1.0",
+  "version": "0.0.0",
   "domain": "climate_template",
   "name": "Climate Template",
   "documentation": "https://github.com/jcwillox/hass-template-climate",
-  "requirements": [],
+  "issue_tracker": "https://github.com/jcwillox/hass-template-climate/issues",
   "dependencies": [],
-  "codeowners": [
-    "@jcwillox"
-  ]
+  "codeowners": ["@jcwillox"],
+  "requirements": [],
+  "iot_class": "computed"
 }
