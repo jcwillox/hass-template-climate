@@ -27,16 +27,6 @@ from homeassistant.components.climate.const import (
     FAN_MEDIUM,
     FAN_HIGH,
 )
-from homeassistant.components.mqtt.climate import (
-    CONF_FAN_MODE_LIST,
-    CONF_MODE_LIST,
-    CONF_SWING_MODE_LIST,
-    CONF_TEMP_MIN,
-    CONF_TEMP_MAX,
-    CONF_PRECISION,
-    CONF_CURRENT_TEMP_TEMPLATE,
-    CONF_TEMP_STEP,
-)
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.const import (
@@ -57,6 +47,15 @@ from homeassistant.helpers.script import Script
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
 _LOGGER = logging.getLogger(__name__)
+
+CONF_FAN_MODE_LIST = "fan_modes"
+CONF_MODE_LIST = "modes"
+CONF_SWING_MODE_LIST = "swing_modes"
+CONF_TEMP_MIN = "min_temp"
+CONF_TEMP_MAX = "max_temp"
+CONF_PRECISION = "precision"
+CONF_CURRENT_TEMP_TEMPLATE = "current_temperature_template"
+CONF_TEMP_STEP = "temp_step"
 
 CONF_CURRENT_HUMIDITY_TEMPLATE = "current_humidity_template"
 CONF_SWING_MODE_TEMPLATE = "swing_mode_template"
