@@ -133,7 +133,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
         )
         self._config = config
-        self._name = self._config[CONF_NAME]
+        self._attr_name = config[CONF_NAME]
+        self._attr_min_temp = config[CONF_TEMP_MIN]
+        self._attr_max_temp = config[CONF_TEMP_MAX]
+        self._attr_target_temperature_step = config[CONF_TEMP_STEP]
 
         self._current_temp = None
         self._current_humidity = None
@@ -149,10 +152,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         self._available = True
         self._unit_of_measurement = hass.config.units.temperature_unit
-        self._supported_features = 0
+        self._attr_supported_features = 0
 
-        self._modes_list = config[CONF_MODE_LIST]
-        self._fan_modes_list = config[CONF_FAN_MODE_LIST]
+        self._attr_hvac_modes = config[CONF_MODE_LIST]
+        self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
         self._swing_modes_list = config[CONF_SWING_MODE_LIST]
 
         self.entity_id = async_generate_entity_id(
@@ -164,32 +167,32 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         set_hvac_mode_action = config.get(CONF_SET_HVAC_MODE_ACTION)
         if set_hvac_mode_action:
             self._set_hvac_mode_script = Script(
-                hass, set_hvac_mode_action, self._name, DOMAIN
+                hass, set_hvac_mode_action, self._attr_name, DOMAIN
             )
 
         self._set_swing_mode_script = None
         set_swing_mode_action = config.get(CONF_SET_SWING_MODE_ACTION)
         if set_swing_mode_action:
             self._set_swing_mode_script = Script(
-                hass, set_swing_mode_action, self._name, DOMAIN
+                hass, set_swing_mode_action, self._attr_name, DOMAIN
             )
-            self._supported_features |= SUPPORT_SWING_MODE
+            self._attr_supported_features |= SUPPORT_SWING_MODE
 
         self._set_fan_mode_script = None
         set_fan_mode_action = config.get(CONF_SET_FAN_MODE_ACTION)
         if set_fan_mode_action:
             self._set_fan_mode_script = Script(
-                hass, set_fan_mode_action, self._name, DOMAIN
+                hass, set_fan_mode_action, self._attr_name, DOMAIN
             )
-            self._supported_features |= SUPPORT_FAN_MODE
+            self._attr_supported_features |= SUPPORT_FAN_MODE
 
         self._set_temperature_script = None
         set_temperature_action = config.get(CONF_SET_TEMPERATURE_ACTION)
         if set_temperature_action:
             self._set_temperature_script = Script(
-                hass, set_temperature_action, self._name, DOMAIN
+                hass, set_temperature_action, self._attr_name, DOMAIN
             )
-            self._supported_features |= SUPPORT_TARGET_TEMPERATURE
+            self._attr_supported_features |= SUPPORT_TARGET_TEMPERATURE
 
     async def async_added_to_hass(self):
         """Run when entity about to be added."""
@@ -275,26 +278,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
 
     @property
-    def name(self):
-        """Return the name of the climate device."""
-        return self._name
-
-    @property
-    def supported_features(self) -> int:
-        """Flag supported features."""
-        return self._supported_features
-
-    @property
-    def min_temp(self):
-        """Return the minimum temperature."""
-        return self._config[CONF_TEMP_MIN]
-
-    @property
-    def max_temp(self):
-        """Return the maximum temperature."""
-        return self._config[CONF_TEMP_MAX]
-
-    @property
     def precision(self):
         """Return the precision of the system."""
         if self._config.get(CONF_PRECISION) is not None:
@@ -322,29 +305,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         return self._target_temp
 
     @property
-    def target_temperature_step(self):
-        """Return the supported step of target temperature."""
-        return self._config[CONF_TEMP_STEP]
-
-    @property
     def hvac_mode(self):
         """Return current operation ie. heat, cool, idle."""
         return self._current_operation
 
     @property
-    def hvac_modes(self):
-        """Return the list of available operation modes."""
-        return self._modes_list
-
-    @property
     def fan_mode(self):
         """Return the fan setting."""
         return self._current_fan_mode
-
-    @property
-    def fan_modes(self):
-        """Return the list of available fan modes."""
-        return self._fan_modes_list
 
     @property
     def swing_mode(self):
