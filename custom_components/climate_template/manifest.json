@@ -4,8 +4,8 @@
   "name": "Climate Template",
   "documentation": "https://github.com/jcwillox/hass-template-climate",
   "issue_tracker": "https://github.com/jcwillox/hass-template-climate/issues",
-  "dependencies": [],
+  "dependencies": ["template"],
   "codeowners": ["@jcwillox"],
   "requirements": [],
-  "iot_class": "computed"
+  "iot_class": "calculated"
 }
