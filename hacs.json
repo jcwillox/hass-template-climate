@@ -2,5 +2,6 @@
   "name": "Template Climate",
   "zip_release": true,
   "hide_default_branch": true,
-  "filename": "climate_template.zip"
+  "filename": "climate_template.zip",
+  "render_readme": true
 }
