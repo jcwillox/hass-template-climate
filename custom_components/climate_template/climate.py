@@ -4,7 +4,11 @@ import logging
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.components.climate import ClimateEntity, ENTITY_ID_FORMAT
+from homeassistant.components.climate import (
+    ClimateEntity,
+    ClimateEntityFeature,
+    ENTITY_ID_FORMAT,
+)
 from homeassistant.components.climate.const import (
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
@@ -14,9 +18,6 @@ from homeassistant.components.climate.const import (
     HVAC_MODE_FAN_ONLY,
     HVAC_MODE_HEAT,
     HVAC_MODE_OFF,
-    SUPPORT_TARGET_TEMPERATURE,
-    SUPPORT_FAN_MODE,
-    SUPPORT_SWING_MODE,
     ATTR_HVAC_MODE,
     ATTR_FAN_MODE,
     ATTR_SWING_MODE,
@@ -176,7 +177,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._set_swing_mode_script = Script(
                 hass, set_swing_mode_action, self._attr_name, DOMAIN
             )
-            self._attr_supported_features |= SUPPORT_SWING_MODE
+            self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
 
         self._set_fan_mode_script = None
         set_fan_mode_action = config.get(CONF_SET_FAN_MODE_ACTION)
@@ -184,7 +185,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._set_fan_mode_script = Script(
                 hass, set_fan_mode_action, self._attr_name, DOMAIN
             )
-            self._attr_supported_features |= SUPPORT_FAN_MODE
+            self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
 
         self._set_temperature_script = None
         set_temperature_action = config.get(CONF_SET_TEMPERATURE_ACTION)
@@ -192,7 +193,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._set_temperature_script = Script(
                 hass, set_temperature_action, self._attr_name, DOMAIN
             )
-            self._attr_supported_features |= SUPPORT_TARGET_TEMPERATURE
+            self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
 
     async def async_added_to_hass(self):
         """Run when entity about to be added."""
