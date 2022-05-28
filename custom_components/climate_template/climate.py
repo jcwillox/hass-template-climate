@@ -59,6 +59,9 @@ CONF_CURRENT_TEMP_TEMPLATE = "current_temperature_template"
 CONF_TEMP_STEP = "temp_step"
 
 CONF_CURRENT_HUMIDITY_TEMPLATE = "current_humidity_template"
+CONF_TARGET_TEMPERATURE_TEMPLATE = "target_temperature_template"
+CONF_HVAC_MODE_TEMPLATE = "hvac_mode_template"
+CONF_FAN_MODE_TEMPLATE = "fan_mode_template"
 CONF_SWING_MODE_TEMPLATE = "swing_mode_template"
 
 CONF_SET_TEMPERATURE_ACTION = "set_temperature"
@@ -81,6 +84,9 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_ENTITY_PICTURE_TEMPLATE): cv.template,
         vol.Optional(CONF_CURRENT_TEMP_TEMPLATE): cv.template,
         vol.Optional(CONF_CURRENT_HUMIDITY_TEMPLATE): cv.template,
+        vol.Optional(CONF_TARGET_TEMPERATURE_TEMPLATE): cv.template,
+        vol.Optional(CONF_HVAC_MODE_TEMPLATE): cv.template,
+        vol.Optional(CONF_FAN_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HVAC_MODE_ACTION): cv.SCRIPT_SCHEMA,
@@ -149,6 +155,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         self._current_temp_template = config.get(CONF_CURRENT_TEMP_TEMPLATE)
         self._current_humidity_template = config.get(CONF_CURRENT_HUMIDITY_TEMPLATE)
+        self._target_temperature_template = config.get(CONF_TARGET_TEMPERATURE_TEMPLATE)
+        self._hvac_mode_template = config.get(CONF_HVAC_MODE_TEMPLATE)
+        self._fan_mode_template = config.get(CONF_FAN_MODE_TEMPLATE)
         self._swing_mode_template = config.get(CONF_SWING_MODE_TEMPLATE)
 
         self._available = True
@@ -242,6 +251,33 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
+        if self._target_temperature_template:
+            self.add_template_attribute(
+                "_target_temp",
+                self._target_temperature_template,
+                None,
+                self._update_target_temp,
+                none_on_template_error=True,
+            )
+
+        if self._hvac_mode_template:
+            self.add_template_attribute(
+                "_current_operation",
+                self._hvac_mode_template,
+                None,
+                self._update_hvac_mode,
+                none_on_template_error=True,
+            )
+
+        if self._fan_mode_template:
+            self.add_template_attribute(
+                "_current_fan_mode",
+                self._fan_mode_template,
+                None,
+                self._update_fan_mode,
+                none_on_template_error=True,
+            )
+
         if self._swing_mode_template:
             self.add_template_attribute(
                 "_current_swing_mode",
@@ -264,6 +300,33 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._current_humidity = float(humidity)
             except ValueError:
                 _LOGGER.error("Could not parse humidity from %s", humidity)
+
+    def _update_target_temp(self, temp):
+        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            try:
+                self._target_temp = float(temp)
+            except ValueError:
+                _LOGGER.error("Could not parse temperature from %s", temp)
+
+    def _update_hvac_mode(self, hvac_mode):
+        if hvac_mode in self._attr_hvac_modes:
+            self._current_operation = hvac_mode
+        elif hvac_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            _LOGGER.error(
+                "Received invalid hvac mode: %s. Expected: %s.",
+                hvac_mode,
+                self._attr_hvac_modes,
+            )
+
+    def _update_fan_mode(self, fan_mode):
+        if fan_mode in self._attr_fan_modes:
+            self._current_fan_mode = fan_mode
+        elif fan_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            _LOGGER.error(
+                "Received invalid fan mode: %s. Expected: %s.",
+                fan_mode,
+                self._attr_hvac_modes,
+            )
 
     def _update_swing_mode(self, swing_mode):
         if swing_mode in self._swing_modes_list:
@@ -327,16 +390,18 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: str) -> None:
         """Set new operation mode."""
-        self._current_operation = hvac_mode  # always optimistic
-        self.async_write_ha_state()
+        if self._hvac_mode_template is None:
+            self._current_operation = hvac_mode  # always optimistic
+            self.async_write_ha_state()
 
         if self._set_hvac_mode_script is not None:
             await self._set_hvac_mode_script.async_run(context=self._context)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new fan mode."""
-        self._current_fan_mode = fan_mode  # always optimistic
-        self.async_write_ha_state()
+        if self._fan_mode_template is None:
+            self._current_fan_mode = fan_mode  # always optimistic
+            self.async_write_ha_state()
 
         if self._set_fan_mode_script is not None:
             await self._set_fan_mode_script.async_run(context=self._context)
@@ -352,8 +417,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
-        self._target_temp = kwargs.get(ATTR_TEMPERATURE)  # always optimistic
-        self.async_write_ha_state()
+        if self._target_temperature_template is None:
+            self._target_temp = kwargs.get(ATTR_TEMPERATURE)  # always optimistic
+            self.async_write_ha_state()
 
         if (
             kwargs.get(ATTR_HVAC_MODE) is not None
