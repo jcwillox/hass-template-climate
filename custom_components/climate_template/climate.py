@@ -331,7 +331,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self.async_write_ha_state()
 
         if self._set_hvac_mode_script is not None:
-            await self._set_hvac_mode_script.async_run(context=self._context)
+            await self._set_hvac_mode_script.async_run(
+                run_variables={ATTR_HVAC_MODE: hvac_mode},
+                context=self._context
+            )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new fan mode."""
@@ -339,7 +342,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self.async_write_ha_state()
 
         if self._set_fan_mode_script is not None:
-            await self._set_fan_mode_script.async_run(context=self._context)
+            await self._set_fan_mode_script.async_run(
+                run_variables={ATTR_FAN_MODE: fan_mode},
+                context=self._context
+            )
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         """Set new swing mode."""
@@ -348,7 +354,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self.async_write_ha_state()
 
         if self._set_swing_mode_script is not None:
-            await self._set_swing_mode_script.async_run(context=self._context)
+            await self._set_swing_mode_script.async_run(
+                run_variables={ATTR_SWING_MODE: swing_mode},
+                context=self._context
+            )
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
@@ -362,4 +371,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             await self.async_set_hvac_mode(operation_mode)
 
         if self._set_temperature_script is not None:
-            await self._set_temperature_script.async_run(context=self._context)
+            await self._set_temperature_script.async_run(
+                run_variables={
+                    ATTR_TEMPERATURE: kwargs.get(ATTR_TEMPERATURE),
+                    ATTR_HVAC_MODE: kwargs.get(ATTR_HVAC_MODE)
+                },
+                context=self._context
+            )
