@@ -12,12 +12,6 @@ from homeassistant.components.climate import (
 from homeassistant.components.climate.const import (
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
-    HVAC_MODE_AUTO,
-    HVAC_MODE_COOL,
-    HVAC_MODE_DRY,
-    HVAC_MODE_FAN_ONLY,
-    HVAC_MODE_HEAT,
-    HVAC_MODE_OFF,
     ATTR_HVAC_MODE,
     ATTR_FAN_MODE,
     ATTR_SWING_MODE,
@@ -27,6 +21,7 @@ from homeassistant.components.climate.const import (
     FAN_LOW,
     FAN_MEDIUM,
     FAN_HIGH,
+    HVACMode,
 )
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
 from homeassistant.components.template.template_entity import TemplateEntity
@@ -95,12 +90,12 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(
             CONF_MODE_LIST,
             default=[
-                HVAC_MODE_AUTO,
-                HVAC_MODE_OFF,
-                HVAC_MODE_COOL,
-                HVAC_MODE_HEAT,
-                HVAC_MODE_DRY,
-                HVAC_MODE_FAN_ONLY,
+                HVACMode.AUTO,
+                HVACMode.OFF,
+                HVACMode.COOL,
+                HVACMode.HEAT,
+                HVACMode.DRY,
+                HVACMode.FAN_ONLY,
             ],
         ): cv.ensure_list,
         vol.Optional(
@@ -108,7 +103,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
             default=[FAN_AUTO, FAN_LOW, FAN_MEDIUM, FAN_HIGH],
         ): cv.ensure_list,
         vol.Optional(
-            CONF_SWING_MODE_LIST, default=[STATE_ON, HVAC_MODE_OFF]
+            CONF_SWING_MODE_LIST, default=[STATE_ON, HVACMode.OFF]
         ): cv.ensure_list,
         vol.Optional(CONF_TEMP_MIN, default=DEFAULT_MIN_TEMP): vol.Coerce(float),
         vol.Optional(CONF_TEMP_MAX, default=DEFAULT_MAX_TEMP): vol.Coerce(float),
@@ -116,7 +111,6 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
             [PRECISION_TENTHS, PRECISION_HALVES, PRECISION_WHOLE]
         ),
         vol.Optional(CONF_TEMP_STEP, default=DEFAULT_PRECISION): vol.Coerce(float),
-        # vol.Optional(CONF_TEMP_INITIAL, default=DEFAULT_TEMP): cv.positive_int,
     }
 )
 
@@ -149,8 +143,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._current_humidity = None
 
         self._current_fan_mode = FAN_LOW  # default optimistic state
-        self._current_operation = HVAC_MODE_OFF  # default optimistic state
-        self._current_swing_mode = HVAC_MODE_OFF  # default optimistic state
+        self._current_operation = HVACMode.OFF  # default optimistic state
+        self._current_swing_mode = HVACMode.OFF  # default optimistic state
         self._target_temp = DEFAULT_TEMP  # default optimistic state
 
         self._current_temp_template = config.get(CONF_CURRENT_TEMP_TEMPLATE)
@@ -219,7 +213,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 ATTR_FAN_MODE, FAN_LOW
             )
             self._current_swing_mode = previous_state.attributes.get(
-                ATTR_SWING_MODE, HVAC_MODE_OFF
+                ATTR_SWING_MODE, HVACMode.OFF
             )
 
             if ATTR_CURRENT_TEMPERATURE in previous_state.attributes:
