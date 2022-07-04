@@ -90,6 +90,18 @@ climate:
       # could also send IR command via broadlink service calls etc.
 ```
 
+### Example action to control existing Home Assistant devices
+
+```yaml
+    # Example Action.
+    set_hvac_mode:
+      # allows me to disable sending commands to aircon via UI.
+      - service: climate.set_hvac_mode
+        data:
+          entity_id: "climate.bedroom_ac_nottemplate"
+          hvac_mode: "{{states('climate.bedroom_ac_template')}}"
+```
+
 ### Use Cases
 
 - Merge multiple components into one climate device (just like any template platform).
