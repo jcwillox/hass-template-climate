@@ -71,7 +71,7 @@ climate:
     # available based on esphome nodes' availability.
     availability_template: "{{ is_state('binary_sensor.bedroom_node_status', 'on') }}"
 
-    # Example Action.
+    # example action
     set_hvac_mode:
       # allows me to disable sending commands to aircon via UI.
       - condition: state
@@ -88,6 +88,20 @@ climate:
           light: "{{ is_state('light.bedroom_aircon_light', 'on') }}"
 
       # could also send IR command via broadlink service calls etc.
+```
+
+### Example action to control existing Home Assistant devices
+
+```yaml
+climate:
+  - platform: climate_template
+    # ...
+    set_hvac_mode:
+      # allows you to control an existing Home Assistant HVAC device
+      - service: climate.set_hvac_mode
+        data:
+          entity_id: climate.bedroom_ac_nottemplate
+          hvac_mode: "{{ states('climate.bedroom_ac_template') }}"
 ```
 
 ### Use Cases
