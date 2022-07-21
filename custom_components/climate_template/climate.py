@@ -387,7 +387,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             _LOGGER.error(
                 "Received invalid fan mode: %s. Expected: %s.",
                 fan_mode,
-                self._attr_hvac_modes,
+                self._attr_fan_modes,
             )
 
     def _update_swing_mode(self, swing_mode):
