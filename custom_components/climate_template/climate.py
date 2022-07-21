@@ -353,6 +353,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._target_temp = float(temp)
+                self.hass.async_create_task(
+                    self.async_set_temperature(**{ATTR_TEMPERATURE: self._target_temp})
+                )
             except ValueError:
                 _LOGGER.error("Could not parse temperature from %s", temp)
 
@@ -360,6 +363,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_target_temperature_high = float(temp)
+                self.hass.async_create_task(
+                    self.async_set_temperature(
+                        **{ATTR_TARGET_TEMP_HIGH: self._attr_target_temperature_high}
+                    )
+                )
             except ValueError:
                 _LOGGER.error("Could not parse temperature high from %s", temp)
 
@@ -367,12 +375,18 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_target_temperature_low = float(temp)
+                self.hass.async_create_task(
+                    self.async_set_temperature(
+                        **{ATTR_TARGET_TEMP_LOW: self._attr_target_temperature_low}
+                    )
+                )
             except ValueError:
                 _LOGGER.error("Could not parse temperature low from %s", temp)
 
     def _update_hvac_mode(self, hvac_mode):
         if hvac_mode in self._attr_hvac_modes:
             self._current_operation = hvac_mode
+            self.hass.async_create_task(self.async_set_hvac_mode(hvac_mode))
         elif hvac_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
                 "Received invalid hvac mode: %s. Expected: %s.",
@@ -383,6 +397,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def _update_fan_mode(self, fan_mode):
         if fan_mode in self._attr_fan_modes:
             self._current_fan_mode = fan_mode
+            self.hass.async_create_task(self.async_set_fan_mode(fan_mode))
         elif fan_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
                 "Received invalid fan mode: %s. Expected: %s.",
