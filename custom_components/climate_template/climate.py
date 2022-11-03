@@ -24,6 +24,7 @@ from homeassistant.components.climate.const import (
     ATTR_TARGET_TEMP_HIGH,
     ATTR_TARGET_TEMP_LOW,
     HVACMode,
+    HVACAction,
 )
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
 from homeassistant.components.template.template_entity import TemplateEntity
@@ -62,6 +63,7 @@ CONF_TARGET_TEMPERATURE_LOW_TEMPLATE = "target_temperature_low_template"
 CONF_HVAC_MODE_TEMPLATE = "hvac_mode_template"
 CONF_FAN_MODE_TEMPLATE = "fan_mode_template"
 CONF_SWING_MODE_TEMPLATE = "swing_mode_template"
+CONF_HVAC_ACTION_TEMPLATE = "hvac_action_template"
 
 CONF_SET_TEMPERATURE_ACTION = "set_temperature"
 CONF_SET_HVAC_MODE_ACTION = "set_hvac_mode"
@@ -89,6 +91,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_HVAC_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_FAN_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
+        vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HVAC_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_FAN_MODE_ACTION): cv.SCRIPT_SCHEMA,
@@ -167,6 +170,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._hvac_mode_template = config.get(CONF_HVAC_MODE_TEMPLATE)
         self._fan_mode_template = config.get(CONF_FAN_MODE_TEMPLATE)
         self._swing_mode_template = config.get(CONF_SWING_MODE_TEMPLATE)
+        self._hvac_action_template = config.get(CONF_HVAC_ACTION_TEMPLATE)
 
         self._available = True
         self._unit_of_measurement = hass.config.units.temperature_unit
@@ -335,6 +339,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
+        if self._hvac_action_template:
+            self.add_template_attribute(
+                "_hvac_action",
+                self._hvac_action_template,
+                None,
+                self._update_hvac_action,
+                none_on_template_error=True,
+            )
+
     def _update_current_temp(self, temp):
         if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
@@ -416,6 +429,17 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 "Received invalid swing mode: %s. Expected: %s.",
                 swing_mode,
                 self._swing_modes_list,
+            )
+
+    def _update_hvac_action(self, hvac_action):
+        if hvac_action in [member.value for member in HVACAction]:
+            if self._attr_hvac_action != hvac_action:
+                self._attr_hvac_action = hvac_action
+        elif hvac_action not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            _LOGGER.error(
+                "Received invalid hvac action: %s. Expected: %s.",
+                hvac_action,
+                [member.value for member in HVACAction],
             )
 
     @property
