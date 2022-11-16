@@ -39,6 +39,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     CONF_ICON_TEMPLATE,
     CONF_ENTITY_PICTURE_TEMPLATE,
+    CONF_UNIQUE_ID,
 )
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -120,6 +121,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
             [PRECISION_TENTHS, PRECISION_HALVES, PRECISION_WHOLE]
         ),
         vol.Optional(CONF_TEMP_STEP, default=DEFAULT_PRECISION): vol.Coerce(float),
+        vol.Optional(CONF_UNIQUE_ID): cv.string,
     }
 )
 
@@ -143,6 +145,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
         )
         self._config = config
+        self._attr_unique_id = config.get(CONF_UNIQUE_ID, None)
         self._attr_name = config[CONF_NAME]
         self._attr_min_temp = config[CONF_TEMP_MIN]
         self._attr_max_temp = config[CONF_TEMP_MAX]
