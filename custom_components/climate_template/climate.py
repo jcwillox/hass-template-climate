@@ -435,7 +435,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
 
     def _update_hvac_action(self, hvac_action):
-        if hvac_action in [member.value for member in HVACAction]:
+        if (
+            hvac_action in [member.value for member in HVACAction]
+            or hvac_action is None
+        ):
             if self._attr_hvac_action != hvac_action:
                 self._attr_hvac_action = hvac_action
         elif hvac_action not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
