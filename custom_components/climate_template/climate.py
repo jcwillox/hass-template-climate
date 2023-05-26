@@ -17,6 +17,7 @@ from homeassistant.components.climate.const import (
     ATTR_SWING_MODE,
     ATTR_CURRENT_TEMPERATURE,
     ATTR_CURRENT_HUMIDITY,
+    ATTR_HUMIDITY,
     FAN_AUTO,
     FAN_LOW,
     FAN_MEDIUM,
@@ -58,6 +59,7 @@ CONF_CURRENT_TEMP_TEMPLATE = "current_temperature_template"
 CONF_TEMP_STEP = "temp_step"
 
 CONF_CURRENT_HUMIDITY_TEMPLATE = "current_humidity_template"
+CONF_TARGET_HUMIDITY_TEMPLATE = "target_humidity_template"
 CONF_TARGET_TEMPERATURE_TEMPLATE = "target_temperature_template"
 CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE = "target_temperature_high_template"
 CONF_TARGET_TEMPERATURE_LOW_TEMPLATE = "target_temperature_low_template"
@@ -67,6 +69,7 @@ CONF_SWING_MODE_TEMPLATE = "swing_mode_template"
 CONF_HVAC_ACTION_TEMPLATE = "hvac_action_template"
 
 CONF_SET_TEMPERATURE_ACTION = "set_temperature"
+CONF_SET_HUMIDITY_ACTION = "set_humidity"
 CONF_SET_HVAC_MODE_ACTION = "set_hvac_mode"
 CONF_SET_FAN_MODE_ACTION = "set_fan_mode"
 CONF_SET_SWING_MODE_ACTION = "set_swing_mode"
@@ -86,6 +89,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_ENTITY_PICTURE_TEMPLATE): cv.template,
         vol.Optional(CONF_CURRENT_TEMP_TEMPLATE): cv.template,
         vol.Optional(CONF_CURRENT_HUMIDITY_TEMPLATE): cv.template,
+        vol.Optional(CONF_TARGET_HUMIDITY_TEMPLATE): cv.template,
         vol.Optional(CONF_TARGET_TEMPERATURE_TEMPLATE): cv.template,
         vol.Optional(CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE): cv.template,
         vol.Optional(CONF_TARGET_TEMPERATURE_LOW_TEMPLATE): cv.template,
@@ -94,6 +98,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
+        vol.Optional(CONF_SET_HUMIDITY_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HVAC_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_FAN_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_SWING_MODE_ACTION): cv.SCRIPT_SCHEMA,
@@ -158,12 +163,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._current_operation = HVACMode.OFF  # default optimistic state
         self._current_swing_mode = HVACMode.OFF  # default optimistic state
         self._target_temp = DEFAULT_TEMP  # default optimistic state
+        self._target_humidity = None
         self._attr_target_temperature_high = None
         self._attr_target_temperature_low = None
 
         self._current_temp_template = config.get(CONF_CURRENT_TEMP_TEMPLATE)
         self._current_humidity_template = config.get(CONF_CURRENT_HUMIDITY_TEMPLATE)
         self._target_temperature_template = config.get(CONF_TARGET_TEMPERATURE_TEMPLATE)
+        self._target_humidity_template = config.get(CONF_TARGET_HUMIDITY_TEMPLATE)
         self._target_temperature_high_template = config.get(
             CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE
         )
@@ -234,6 +241,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     )
             else:
                 self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
+        
+        self._set_humidity_script = None
+        set_humidity_action = config.get(CONF_SET_HUMIDITY_ACTION)
+        if set_humidity_action:
+            self._set_humidity_script = Script(
+                hass, set_humidity_action, self._attr_name, DOMAIN
+            )
+            self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
 
     async def async_added_to_hass(self):
         """Run when entity about to be added."""
@@ -294,6 +309,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._target_temperature_template,
                 None,
                 self._update_target_temp,
+                none_on_template_error=True,
+            )
+        
+        if self._target_humidity_template:
+            self.add_template_attribute(
+                "_target_humidity",
+                self._target_humidity_template,
+                None,
+                self._update_target_humidity,
                 none_on_template_error=True,
             )
 
@@ -374,6 +398,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
             except ValueError:
                 _LOGGER.error("Could not parse temperature from %s", temp)
+    
+    def _update_target_humidity(self, humidity):
+        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            try:
+                self._target_humidity = float(humidity)
+                self.hass.async_create_task(
+                    self.async_set_humidity(**{ATTR_HUMIDITY: self._target_humidity})
+                )
+            except ValueError:
+                _LOGGER.error("Could not parse humidity from %s", humidity)
 
     def _update_target_temp_high(self, temp):
         if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
@@ -474,6 +508,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def target_temperature(self):
         """Return the temperature we try to reach."""
         return self._target_temp
+    
+    @property
+    def target_humidity(self):
+        """Return the humidity we try to reach."""
+        return self._target_humidity
 
     @property
     def hvac_mode(self):
@@ -561,4 +600,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     ATTR_HVAC_MODE: kwargs.get(ATTR_HVAC_MODE),
                 },
                 context=self._context,
+            )
+
+    async def async_set_humidity(self, humidity) -> None:
+        """Set new humidity target."""
+        if self._target_humidity_template is None:  # use optimistic mode
+            self._current_humidity = humidity
+            self.async_write_ha_state()
+
+        if self._set_humidity_script is not None:
+            await self._set_humidity_script.async_run(
+                run_variables={ATTR_HUMIDITY: humidity}, context=self._context
             )
