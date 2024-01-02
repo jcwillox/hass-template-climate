@@ -99,7 +99,9 @@ DOMAIN = "climate_template"
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Optional(CONF_MODE_ACTION, default=DEFAULT_MODE_ACTION): vol.In(["parallel", "queued", "restart", "single"]),
+        vol.Optional(CONF_MODE_ACTION, default=DEFAULT_MODE_ACTION): vol.In(
+            ["parallel", "queued", "restart", "single"]
+        ),
         vol.Optional(CONF_MAX_ACTION, default=DEFAULT_MAX_ACTION): cv.positive_int,
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
         vol.Optional(CONF_ICON_TEMPLATE): cv.template,
@@ -138,7 +140,15 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         ): cv.ensure_list,
         vol.Optional(
             CONF_PRESET_MODE_LIST,
-            default=[PRESET_ECO, PRESET_AWAY, PRESET_BOOST, PRESET_COMFORT, PRESET_HOME, PRESET_SLEEP, PRESET_ACTIVITY],
+            default=[
+                PRESET_ECO,
+                PRESET_AWAY,
+                PRESET_BOOST,
+                PRESET_COMFORT,
+                PRESET_HOME,
+                PRESET_SLEEP,
+                PRESET_ACTIVITY,
+            ],
         ): cv.ensure_list,
         vol.Optional(
             CONF_SWING_MODE_LIST, default=[STATE_ON, HVACMode.OFF]
@@ -185,7 +195,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._current_humidity = None
 
         self._current_fan_mode = FAN_LOW  # default optimistic state
-        self._current_preset_mode = PRESET_COMFORT # default optimistic state
+        self._current_preset_mode = PRESET_COMFORT  # default optimistic state
         self._current_operation = HVACMode.OFF  # default optimistic state
         self._current_swing_mode = HVACMode.OFF  # default optimistic state
         self._target_temp = DEFAULT_TEMP  # default optimistic state
@@ -227,14 +237,24 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         set_hvac_mode_action = config.get(CONF_SET_HVAC_MODE_ACTION)
         if set_hvac_mode_action:
             self._set_hvac_mode_script = Script(
-                hass, set_hvac_mode_action, self._attr_name, DOMAIN, script_mode=self._attr_mode_action, max_runs=self._attr_max_action
+                hass,
+                set_hvac_mode_action,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
             )
 
         self._set_swing_mode_script = None
         set_swing_mode_action = config.get(CONF_SET_SWING_MODE_ACTION)
         if set_swing_mode_action:
             self._set_swing_mode_script = Script(
-                hass, set_swing_mode_action, self._attr_name, DOMAIN, script_mode=self._attr_mode_action, max_runs=self._attr_max_action
+                hass,
+                set_swing_mode_action,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
             )
             self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
 
@@ -242,7 +262,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         set_fan_mode_action = config.get(CONF_SET_FAN_MODE_ACTION)
         if set_fan_mode_action:
             self._set_fan_mode_script = Script(
-                hass, set_fan_mode_action, self._attr_name, DOMAIN, script_mode=self._attr_mode_action, max_runs=self._attr_max_action
+                hass,
+                set_fan_mode_action,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
             )
             self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
 
@@ -258,7 +283,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         set_temperature_action = config.get(CONF_SET_TEMPERATURE_ACTION)
         if set_temperature_action:
             self._set_temperature_script = Script(
-                hass, set_temperature_action, self._attr_name, DOMAIN, script_mode=self._attr_mode_action, max_runs=self._attr_max_action
+                hass,
+                set_temperature_action,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
             )
             if HVACMode.HEAT_COOL in self._attr_hvac_modes:
                 self._attr_supported_features |= (
@@ -277,7 +307,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     )
             else:
                 self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
-        
+
         self._set_humidity_script = None
         set_humidity_action = config.get(CONF_SET_HUMIDITY_ACTION)
         if set_humidity_action:
@@ -350,7 +380,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._update_target_temp,
                 none_on_template_error=True,
             )
-        
+
         if self._target_humidity_template:
             self.add_template_attribute(
                 "_target_humidity",
@@ -445,7 +475,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
             except ValueError:
                 _LOGGER.error("Could not parse temperature from %s", temp)
-    
+
     def _update_target_humidity(self, humidity):
         if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
@@ -566,7 +596,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def target_temperature(self):
         """Return the temperature we try to reach."""
         return self._target_temp
-    
+
     @property
     def target_humidity(self):
         """Return the humidity we try to reach."""
@@ -607,6 +637,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             await self._set_hvac_mode_script.async_run(
                 run_variables={ATTR_HVAC_MODE: hvac_mode}, context=self._context
             )
+
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
         if self._preset_mode_template is None:
