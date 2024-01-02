@@ -3,9 +3,9 @@
   "name": "Climate Template",
   "codeowners": ["@jcwillox"],
   "dependencies": ["template"],
-  "documentation": "https://github.com/jcwillox/hass-template-climate",
+  "documentation": "https://github.com/litinoveweedle/hass-template-climate",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/jcwillox/hass-template-climate/issues",
+  "issue_tracker": "https://github.com/litinoveweedle/hass-template-climate/issues",
   "requirements": [],
   "version": "0.0.0"
 }
