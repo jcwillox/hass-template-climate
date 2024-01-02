@@ -1,12 +1,14 @@
 # ❄️ Template Climate
 
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![License](https://img.shields.io/github/license/jcwillox/hass-template-climate?style=for-the-badge)](https://github.com/jcwillox/hass-template-climate/blob/main/LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/jcwillox/hass-template-climate?style=for-the-badge)](https://github.com/jcwillox/hass-template-climate/releases)
-[![Size](https://img.badgesize.io/https:/github.com/jcwillox/hass-template-climate/releases/latest/download/climate_template.zip?style=for-the-badge)](https://github.com/jcwillox/hass-template-climate/releases)
+[![License](https://img.shields.io/github/license/litinoveweedle/hass-template-climate?style=for-the-badge)](https://github.com/litinoveweedle/hass-template-climate/blob/main/LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/litinoveweedle/hass-template-climate?style=for-the-badge)](https://github.com/litinoveweedle/hass-template-climate/releases)
+[![Size](https://img.badgesize.io/https:/github.com/litinoveweedle/hass-template-climate/releases/latest/download/climate_template.zip?style=for-the-badge)](https://github.com/litinoveweedle/hass-template-climate/releases)
 [![Code style](https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge)](https://github.com/psf/black)
 
 The `climate_template` platform creates climate devices that combine integrations and provides the ability to run scripts or invoke services for each of the `set_*` commands of a climate entity.
+
+This is a fork of the original repository jcwillox/hass-template-climate which seems to be unmaintained at the time with several pull requests pending. As those were very useful to my usage I decided to fork and merge the work of the corresponding authors to allow at least for me simple usage of the integration through HACS. Therefore all the corresponding rights belong to the original authors.
 
 ## Configuration
 
