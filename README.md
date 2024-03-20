@@ -62,6 +62,8 @@ climate:
       - "fan_only"
     min_temp: 16
     max_temp: 30
+    min_humidity: 0
+    max_humidity: 100
 
     # get current temp.
     current_temperature_template: "{{ states('sensor.bedroom_temperature') }}"
