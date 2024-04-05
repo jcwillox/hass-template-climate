@@ -23,6 +23,7 @@ from homeassistant.components.climate.const import (
     FAN_LOW,
     FAN_MEDIUM,
     FAN_HIGH,
+    SWING_OFF,
     PRESET_ACTIVITY,
     PRESET_AWAY,
     PRESET_BOOST,
@@ -358,7 +359,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 ATTR_PRESET_MODE, PRESET_COMFORT
             )
             self._current_swing_mode = previous_state.attributes.get(
-                ATTR_SWING_MODE, HVACMode.OFF
+                ATTR_SWING_MODE, SWING_OFF
             )
 
             if current_temperature := previous_state.attributes.get(
