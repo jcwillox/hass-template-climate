@@ -649,7 +649,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     @property
     def last_on_operation(self):
         """Return the last non-idle operation ie. heat, cool."""
-        return self._last_on_operation  
+        return self._last_on_operation
 
     async def async_turn_off(self) -> None:
         """Turn climate off."""
