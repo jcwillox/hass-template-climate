@@ -1,7 +1,7 @@
 {
   "domain": "climate_template",
   "name": "Climate Template",
-  "codeowners": ["@jcwillox"],
+  "codeowners": ["@jcwillox", "@litinoveweedle"],
   "dependencies": ["template"],
   "documentation": "https://github.com/litinoveweedle/hass-template-climate",
   "iot_class": "calculated",
