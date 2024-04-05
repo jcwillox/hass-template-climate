@@ -237,8 +237,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         # set supported features to enable turn_on and turn_off services
         if HVACMode.OFF in self._attr_hvac_modes and len(self._attr_hvac_modes) >= 2:
             self._attr_supported_features |= (
-                ClimateEntityFeature.TURN_OFF |
-                ClimateEntityFeature.TURN_ON
+                ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON
             )
             if HVACMode.AUTO in self._attr_hvac_modes:
                 self._last_on_operation = HVACMode.AUTO
@@ -370,8 +369,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if humidity := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY):
                 self._current_humidity = humidity
 
-            if 'last_on_operation' in previous_state.attributes:
-                self._last_on_operation = previous_state.attributes['last_on_operation']
+            if "last_on_operation" in previous_state.attributes:
+                self._last_on_operation = previous_state.attributes["last_on_operation"]
 
         # register templates
         if self._current_temp_template:
@@ -650,7 +649,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     @property
     def last_on_operation(self):
         """Return the last non-idle operation ie. heat, cool."""
-        return self._last_on_operation       
+        return self._last_on_operation  
 
     async def async_turn_off(self) -> None:
         """Turn climate off."""
