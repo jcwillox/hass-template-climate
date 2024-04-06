@@ -657,7 +657,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         # Create a context referring to the trigger context.
         trigger_context_id = None if context is None else context.id
         script_context = Context(parent_id=trigger_context_id)
-        await script.async_run(run_variables = variables, context = script_context)
+        await script.async_run(run_variables=variables, context=script_context)
 
     async def async_turn_off(self) -> None:
         """Turn climate off."""
@@ -677,9 +677,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         if self._set_hvac_mode_script is not None:
             await self._run_script(
-                self._set_hvac_mode_script,
-                {ATTR_HVAC_MODE: hvac_mode},
-                self._context
+                self._set_hvac_mode_script, {ATTR_HVAC_MODE: hvac_mode}, self._context
             )
 
         if not hvac_mode == HVACMode.OFF:
@@ -695,7 +693,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             await self._run_script(
                 self._set_preset_mode_script,
                 {ATTR_PRESET_MODE: preset_mode},
-                self._context
+                self._context,
             )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
@@ -706,9 +704,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         if self._set_fan_mode_script is not None:
             await self._run_script(
-                self._set_fan_mode_script,
-                {ATTR_FAN_MODE: fan_mode},
-                self._context
+                self._set_fan_mode_script, {ATTR_FAN_MODE: fan_mode}, self._context
             )
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
@@ -721,7 +717,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             await self._run_script(
                 self._set_swing_mode_script,
                 {ATTR_SWING_MODE: swing_mode},
-                self._context
+                self._context,
             )
 
     async def async_set_temperature(self, **kwargs) -> None:
@@ -757,7 +753,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     ATTR_TARGET_TEMP_LOW: kwargs.get(ATTR_TARGET_TEMP_LOW),
                     ATTR_HVAC_MODE: kwargs.get(ATTR_HVAC_MODE),
                 },
-                self._context
+                self._context,
             )
 
     async def async_set_humidity(self, humidity) -> None:
@@ -768,7 +764,5 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         if self._set_humidity_script is not None:
             await self._run_script(
-                self._set_humidity_script,
-                {ATTR_HUMIDITY: humidity},
-                self._context
+                self._set_humidity_script, {ATTR_HUMIDITY: humidity}, self._context
             )
