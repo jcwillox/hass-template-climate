@@ -669,8 +669,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     def _validate_value(self, attribute, value, format):
         if value is None:
-            # Shoudl never happen, but who knows.
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Entity %s attribute %s returned value: None.",
                 self._attr_name,
                 attribute,
@@ -803,39 +802,49 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_current_temperature(self, result: float):
-        if current_temperature := self._validate_value(
-            "current_temperature", result, "temperature"
-        ):
+        if (
+            current_temperature := self._validate_value(
+                "current_temperature", result, "temperature"
+            )
+        ) is not None:
             self._attr_current_temperature = current_temperature
 
     @callback
     def _update_current_humidity(self, result: float):
-        if current_humidity := self._validate_value(
-            "current_humidity", result, "humidity"
-        ):
+        if (
+            current_humidity := self._validate_value(
+                "current_humidity", result, "humidity"
+            )
+        ) is not None:
             self._attr_current_humidity = current_humidity
 
     @callback
     def _update_hvac_action(self, result: str):
-        if hvac_action := self._validate_value(
-            "hvac_action", result, [member.value for member in HVACAction]
-        ):
+        if (
+            hvac_action := self._validate_value(
+                "hvac_action", result, [member.value for member in HVACAction]
+            )
+        ) is not None:
             self._attr_hvac_action = hvac_action
 
     @callback
     def _update_target_temperature(self, result: float):
-        if target_temperature := self._validate_value(
-            "target_temperature", result, "setpoint"
-        ):
+        if (
+            target_temperature := self._validate_value(
+                "target_temperature", result, "setpoint"
+            )
+        ) is not None:
             self.hass.async_create_task(
                 self._async_set_attribute("target_temperature", target_temperature),
             )
 
     @callback
     def _update_target_temperature_high(self, result: float):
-        if target_temperature_high := self._validate_value(
-            "target_temperature_high", result, "setpoint"
-        ):
+        if (
+            target_temperature_high := self._validate_value(
+                "target_temperature_high", result, "setpoint"
+            )
+        ) is not None:
             self.hass.async_create_task(
                 self._async_set_attribute(
                     "target_temperature_high", target_temperature_high
@@ -844,9 +853,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_temperature_low(self, result: float):
-        if target_temperature_low := self._validate_value(
-            "target_temperature_low", result, "setpoint"
-        ):
+        if (
+            target_temperature_low := self._validate_value(
+                "target_temperature_low", result, "setpoint"
+            )
+        ) is not None:
             self.hass.async_create_task(
                 self._async_set_attribute(
                     "target_temperature_low", target_temperature_low
@@ -855,41 +866,51 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_humidity(self, result: int):
-        if target_humidity := self._validate_value(
-            "target_humidity", result, "humidity"
-        ):
+        if (
+            target_humidity := self._validate_value(
+                "target_humidity", result, "humidity"
+            )
+        ) is not None:
             self.hass.async_create_task(
                 self._async_set_attribute("target_humidity", target_humidity),
             )
 
     @callback
     def _update_hvac_mode(self, result: str):
-        if hvac_mode := self._validate_value(
-            "hvac_mode", result, self._attr_hvac_modes
-        ):
+        if (
+            hvac_mode := self._validate_value(
+                "hvac_mode", result, self._attr_hvac_modes
+            )
+        ) is not None:
             self.hass.async_create_task(
                 self._async_set_attribute("hvac_mode", hvac_mode),
             )
 
     @callback
     def _update_preset_mode(self, result: str):
-        if preset_mode := self._validate_value(
-            "preset_mode", result, self._attr_preset_modes
-        ):
+        if (
+            preset_mode := self._validate_value(
+                "preset_mode", result, self._attr_preset_modes
+            )
+        ) is not None:
             self.hass.async_create_task(
                 self._async_set_attribute("preset_mode", preset_mode),
             )
 
     @callback
     def _update_fan_mode(self, result: str):
-        if fan_mode := self._validate_value("fan_mode", result, self.fan_modes):
+        if (
+            fan_mode := self._validate_value("fan_mode", result, self.fan_modes)
+        ) is not None:
             self.hass.async_create_task(
                 self._async_set_attribute("fan_mode", fan_mode),
             )
 
     @callback
     def _update_swing_mode(self, result: str):
-        if swing_mode := self._validate_value("swing_mode", result, self.swing_modes):
+        if (
+            swing_mode := self._validate_value("swing_mode", result, self.swing_modes)
+        ) is not None:
             self.hass.async_create_task(
                 self._async_set_attribute("swing_mode", swing_mode)
             )
@@ -1092,57 +1113,109 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_turn_off(self) -> None:
         """Turn climate off."""
-        if self._off_mode["hvac_mode"] in self._attr_hvac_modes:
+        if "hvac_mode" in self._off_mode.keys():
             await self.async_set_hvac_mode(self._off_mode["hvac_mode"])
 
     async def async_turn_on(self) -> None:
         """Turn climate on."""
-        if self._last_on_mode["hvac_mode"] in self._attr_hvac_modes:
+        if "hvac_mode" in self._last_on_mode.keys():
             await self.async_set_hvac_mode(self._last_on_mode["hvac_mode"])
 
-    async def async_set_hvac_mode(self, hvac_mode: str) -> None:
+    async def async_set_hvac_mode(self, input: str) -> None:
         """Set new hvac mode."""
-        await self._async_set_attribute("hvac_mode", hvac_mode)
+        if (
+            hvac_mode := self._validate_value(
+                "hvac_mode",
+                input,
+                self._attr_hvac_modes,
+            )
+        ) is not None:
+            await self._async_set_attribute("hvac_mode", hvac_mode)
 
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
+    async def async_set_preset_mode(self, input: str) -> None:
         """Set new preset mode."""
-        await self._async_set_attribute("preset_mode", preset_mode)
+        if (
+            preset_mode := self._validate_value(
+                "preset_mode",
+                input,
+                self._attr_preset_modes,
+            )
+        ) is not None:
+            await self._async_set_attribute("preset_mode", preset_mode)
 
-    async def async_set_fan_mode(self, fan_mode: str) -> None:
+    async def async_set_fan_mode(self, input: str) -> None:
         """Set new fan mode."""
-        await self._async_set_attribute("fan_mode", fan_mode)
+        if (
+            fan_mode := self._validate_value(
+                "fan_mode",
+                input,
+                self._attr_fan_modes,
+            )
+        ) is not None:
+            await self._async_set_attribute("fan_mode", fan_mode)
 
-    async def async_set_swing_mode(self, swing_mode: str) -> None:
+    async def async_set_swing_mode(self, input: str) -> None:
         """Set new swing mode."""
-        await self._async_set_attribute("swing_mode", swing_mode)
+        if (
+            swing_mode := self._validate_value(
+                "swing_mode",
+                input,
+                self._attr_swing_modes,
+            )
+        ) is not None:
+            await self._async_set_attribute("swing_mode", swing_mode)
 
-    async def async_set_humidity(self, target_humidity: int) -> None:
+    async def async_set_humidity(self, input: int) -> None:
         """Set new humidity target."""
-        await self._async_set_attribute("target_humidity", round(target_humidity))
+        if (
+            target_humidity := self._validate_value(
+                "target_humidity",
+                input,
+                "target_humidity",
+            )
+        ) is not None:
+            await self._async_set_attribute("target_humidity", target_humidity)
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperatures."""
-        hvac_mode = kwargs.get(ATTR_HVAC_MODE)
-        if hvac_mode is not None:
+        if (
+            hvac_mode := self._validate_value(
+                "hvac_mode",
+                kwargs.get(ATTR_HVAC_MODE),
+                self._attr_hvac_modes,
+            )
+        ) is not None:
             await self._async_set_attribute("hvac_mode", hvac_mode)
 
-        if hvac_mode == HVACMode.HEAT_COOL:
-            target_temperature_high = kwargs.get(ATTR_TARGET_TEMP_HIGH)
-            target_temperature_low = kwargs.get(ATTR_TARGET_TEMP_LOW)
-            if target_temperature_high is not None:
-                await self._async_set_attribute(
-                    "target_temperature_high",
-                    self._round_temp_step(target_temperature_high),
-                )
-            if target_temperature_low is not None:
-                await self._async_set_attribute(
+        if self._attr_hvac_mode == HVACMode.HEAT_COOL:
+            if (
+                target_temperature_low := self._validate_value(
                     "target_temperature_low",
-                    self._round__temp_step(target_temperature_low),
+                    kwargs.get(ATTR_TARGET_TEMP_LOW),
+                    "target_temperature",
+                )
+            ) is not None:
+                await self._async_set_attribute(
+                    "target_temperature_low", target_temperature_low
+                )
+            if (
+                target_temperature_high := self._validate_value(
+                    "target_temperature_high",
+                    kwargs.get(ATTR_TARGET_TEMP_HIGH),
+                    "target_temperature",
+                )
+            ) is not None:
+                await self._async_set_attribute(
+                    "target_temperature_high", target_temperature_high
                 )
         else:
-            target_temperature = kwargs.get(ATTR_TEMPERATURE, None)
-            if target_temperature is not None:
-                await self._async_set_attribute(
+            if (
+                target_temperature := self._validate_value(
                     "target_temperature",
-                    self._round_temp_step(target_temperature),
+                    kwargs.get(ATTR_TEMPERATURE),
+                    "target_temperature",
+                )
+            ) is not None:
+                await self._async_set_attribute(
+                    "target_temperature", target_temperature
                 )
