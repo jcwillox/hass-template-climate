@@ -278,7 +278,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     self._last_on_mode["hvac_mode"] = HVACMode.OFF
         else:
             _LOGGER.error(
-                "Entity %s has no hvac mode, at least one hvac mode shall be configured!",
+                "Entity '%s' has no hvac mode, at least one hvac mode shall be configured!",
                 self._attr_name,
             )
             return False
@@ -288,7 +288,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
             else:
                 _LOGGER.warning(
-                    "Entity %s has preset mode configured, but there is neither action %s nor template %s configured.",
+                    "Entity '%s' has preset mode configured, but there is neither action '%s' nor template '%s' configured.",
                     self._attr_name,
                     CONF_SET_PRESET_MODE_ACTION,
                     CONF_PRESET_MODE_TEMPLATE,
@@ -296,7 +296,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_preset_modes = []
         elif self._action_preset_mode or self._template_preset_mode:
             _LOGGER.warning(
-                "Entity %s has no preset mode configured, but there is action %s and/or template %s configured.",
+                "Entity '%s' has no preset mode configured, but there is action '%s' and/or template '%s' configured.",
                 self._attr_name,
                 CONF_SET_PRESET_MODE_ACTION,
                 CONF_PRESET_MODE_TEMPLATE,
@@ -309,7 +309,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
             else:
                 _LOGGER.warning(
-                    "Entity %s has fan mode configured, but there is neither action %s nor template %s configured.",
+                    "Entity '%s' has fan mode configured, but there is neither action '%s' nor template '%s' configured.",
                     self._attr_name,
                     CONF_SET_FAN_MODE_ACTION,
                     CONF_FAN_MODE_TEMPLATE,
@@ -317,7 +317,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_fan_modes = []
         elif self._action_fan_mode or self._template_fan_mode:
             _LOGGER.warning(
-                "Entity %s has not fan mode configured, but there is action %s and/or template %s configured.",
+                "Entity '%s' has not fan mode configured, but there is action '%s' and/or template '%s' configured.",
                 self._attr_name,
                 CONF_SET_FAN_MODE_ACTION,
                 CONF_FAN_MODE_TEMPLATE,
@@ -330,7 +330,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
             else:
                 _LOGGER.warning(
-                    "Entity %s has swing mode configured, but there is neither action %s nor template %s configured.",
+                    "Entity '%s' has swing mode configured, but there is neither action '%s' nor template '%s' configured.",
                     self._attr_name,
                     CONF_SET_SWING_MODE_ACTION,
                     CONF_SWING_MODE_TEMPLATE,
@@ -338,7 +338,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_swing_modes = []
         elif self._action_swing_mode or self._template_swing_mode:
             _LOGGER.warning(
-                "Entity %s has no swing mode configured, but there is action %s and/or template %s configured.",
+                "Entity '%s' has no swing mode configured, but there is action '%s' and/or template '%s' configured.",
                 self._attr_name,
                 CONF_SET_SWING_MODE_ACTION,
                 CONF_SWING_MODE_TEMPLATE,
@@ -355,7 +355,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 and self._template_target_temperature_high
             ):
                 _LOGGER.warning(
-                    "Entity %s shall have either both templates %s and %s configured or none of them.",
+                    "Entity '%s' shall have either both templates '%s' and '%s' configured or none of them.",
                     self._attr_name,
                     CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
                     CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE,
@@ -371,7 +371,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
             else:
                 _LOGGER.warning(
-                    "Entity %s has hvac mode heat_cool configured, but there is no action neither template for high or low temperature configued.",
+                    "Entity '%s' has hvac mode heat_cool configured, but there is no action neither template for high or low temperature configued.",
                     self._attr_name,
                 )
         else:
@@ -380,7 +380,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 or self._template_target_temperature_high
             ):
                 _LOGGER.warning(
-                    "Entity %s has no Hvac mode heat_cool configured, but there is %s and/or %s template configured.",
+                    "Entity '%s' has no Hvac mode heat_cool configured, but there is '%s' and/or '%s' template configured.",
                     self._attr_name,
                     CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
                     CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE,
@@ -400,20 +400,20 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
             else:
                 _LOGGER.warning(
-                    "Entity %s has hvac mode auto, heat or cool configured, but there is no action neither template for temperature configued.",
+                    "Entity '%s' has hvac mode auto, heat or cool configured, but there is no action neither template for temperature configued.",
                     self._attr_name,
                 )
         else:
             if self._action_temperature:
                 _LOGGER.warning(
-                    "Entity %s has no hvac mode auto, heat or cool configured, but there is action %s configured.",
+                    "Entity '%s' has no hvac mode auto, heat or cool configured, but there is action '%s' configured.",
                     self._attr_name,
                     CONF_SET_TEMPERATURE_ACTION,
                 )
                 self._action_temperature = None
             if self._template_target_temperature:
                 _LOGGER.warning(
-                    "Entity %s has no hvac mode auto, heat or cool configured, but there is template %s configured.",
+                    "Entity '%s' has no hvac mode auto, heat or cool configured, but there is template '%s' configured.",
                     self._attr_name,
                     CONF_TARGET_TEMPERATURE_TEMPLATE,
                 )
@@ -424,7 +424,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
             else:
                 _LOGGER.warning(
-                    "Entity %s has hvac mode dry configured, but there is no %s action neither %s template configured.",
+                    "Entity '%s' has hvac mode dry configured, but there is no '%s' action neither '%s' template configured.",
                     self._attr_name,
                     CONF_SET_HUMIDITY_ACTION,
                     CONF_TARGET_HUMIDITY_TEMPLATE,
@@ -432,14 +432,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         else:
             if self._action_humidity:
                 _LOGGER.warning(
-                    "Entity %s has no hvac mode dry configured, but there is action %s configured.",
+                    "Entity '%s' has no hvac mode dry configured, but there is action '%s' configured.",
                     self._attr_name,
                     CONF_SET_HUMIDITY_ACTION,
                 )
                 self._action_humidity = None
             if self._template_target_humidity:
                 _LOGGER.warning(
-                    "Entity %s has no hvac mode dry configured, but there is template %s configured.",
+                    "Entity '%s' has no hvac mode dry configured, but there is template '%s' configured.",
                     self._attr_name,
                     CONF_TARGET_HUMIDITY_TEMPLATE,
                 )
@@ -513,7 +513,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         previous_state = await self.async_get_last_state()
         if previous_state is not None:
             _LOGGER.debug(
-                "Entity %s restoring previously stored attributes.",
+                "Entity '%s' restoring previously stored attributes.",
                 self._attr_name,
             )
 
@@ -661,7 +661,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     self._last_on_mode[mode] = value[mode]
 
         _LOGGER.debug(
-            "Entity %s registering templates callbacks.",
+            "Entity '%s' registering templates callbacks.",
             self._attr_name,
         )
 
@@ -766,21 +766,21 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
 
         _LOGGER.debug(
-            "Entity %s succesfully registered to homeassistant.",
+            "Entity '%s' succesfully registered to homeassistant.",
             self._attr_name,
         )
 
     def _validate_value(self, attr):
         if attr["value"] is None:
             _LOGGER.error(
-                "Entity %s attribute %s returned value: 'None'.",
+                "Entity '%s' attribute '%s' returned value: 'None'.",
                 self._attr_name,
                 attr["name"],
             )
             return None
         elif isinstance(attr["value"], TemplateError):
             _LOGGER.error(
-                "Entity %s attribute %s returned exception: '%s'.",
+                "Entity '%s' attribute '%s' returned exception: '%s'.",
                 self._attr_name,
                 attr["name"],
                 attr["value"],
@@ -788,7 +788,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             return None
         elif attr["value"] in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.debug(
-                "Entity %s attribute %s returned Uknown or Unavailable: '%s'.",
+                "Entity '%s' attribute '%s' returned Uknown or Unavailable: '%s'.",
                 self._attr_name,
                 attr["name"],
                 attr["value"],
@@ -799,7 +799,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 attr["value"] = str(attr["value"])
                 if attr["value"] not in attr["format"]:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%s'. Expected one of: %s.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected one of: '%s'.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -816,7 +816,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         attr["value"] = round(float(attr["value"]))
                 except ValueError:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%s'. Expected integer of float.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer of float.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -830,7 +830,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     )
                 except ValueError:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%s'. Expected integer or float.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer or float.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -838,7 +838,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     return None
                 if attr["value"] > self._attr_max_temp:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%s', which is bigger than max setpoint: '%s'.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s', which is bigger than max setpoint: '%s'.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -847,7 +847,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     return None
                 if attr["value"] < self._attr_min_temp:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%s', which is smaller than min setpoint: '%s'.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s', which is smaller than min setpoint: '%s'.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -859,7 +859,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     attr["value"] = round(attr["value"])
                 except ValueError:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%s'. Expected integer of float.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer of float.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -870,7 +870,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     attr["value"] = round(attr["value"])
                 except ValueError:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%'s. Expected integer of float.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%'s. Expected integer of float.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -878,7 +878,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     return None
                 if attr["value"] > self._attr_max_humidity:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%s', which is bigger than max setpoint: '%s'.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s', which is bigger than max setpoint: '%s'.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -887,7 +887,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     return None
                 if attr["value"] < self._attr_min_humidity:
                     _LOGGER.error(
-                        "Entity %s attribute %s returned invalid value: '%s', which is smaller than min setpoint: '%s'.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s', which is smaller than min setpoint: '%s'.",
                         self._attr_name,
                         attr["name"],
                         attr["value"],
@@ -896,14 +896,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     return None
             else:
                 _LOGGER.debug(
-                    "Entity %s attribute %s test called with invalid format: '%s'.",
+                    "Entity '%s' attribute '%s' test called with invalid format: '%s'.",
                     self._attr_name,
                     attr["name"],
                     attr["format"],
                 )
 
         _LOGGER.debug(
-            "Entity %s attribute %s triggered update with value: '%s'.",
+            "Entity '%s' attribute '%s' triggered update with value: '%s'.",
             self._attr_name,
             attr["name"],
             attr["value"],
@@ -1090,6 +1090,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._attr_hvac_action = value
 
     async def _async_set_attribute(self, action, attributes) -> None:
+        update = False
         variables = {}
         for attr in attributes:
             # Validate input values
@@ -1098,7 +1099,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 variables[attr["attr"]] = value
             else:
                 _LOGGER.debug(
-                    "Entity %s attribute %s update called with invalid value: '%s'.",
+                    "Entity '%s' attribute '%s' update called with invalid value: '%s'.",
                     self._attr_name,
                     attr["name"],
                     attr["value"],
@@ -1108,15 +1109,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if getattr(self, "_attr_" + attr["name"]) == attr["value"]:
                 # Nothing to do.
                 _LOGGER.debug(
-                    "Entity %s attribute %s is already set to value: '%s'.",
+                    "Entity '%s' attribute '%s' is already set to value: '%s'.",
                     self._attr_name,
                     attr["name"],
                     attr["value"],
                 )
             else:
+                update = True
                 # Update entity attribute.
                 _LOGGER.debug(
-                    "Entity %s updating attribute %s to value: '%s'.",
+                    "Entity '%s' updating attribute '%s' to value: '%s'.",
                     self._attr_name,
                     attr["name"],
                     attr["value"],
@@ -1131,13 +1133,13 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         self.async_write_ha_state()
 
-        if script := getattr(self, "_script_" + action):
+        if update and (script := getattr(self, "_script_" + action)):
             # Create a context referring to the trigger context.
             trigger_context_id = None if self._context is None else self._context.id
             script_context = Context(parent_id=trigger_context_id)
             # Execute set action script.
             _LOGGER.debug(
-                "Entity %s executing script set_action_%s variables: %s.",
+                "Entity '%s' executing script 'set_action_%s' variables: '%s'.",
                 self._attr_name,
                 action,
                 variables,
@@ -1147,7 +1149,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 context=script_context,
             )
             _LOGGER.debug(
-                "Entity %s execution of script set_action_%s finished.",
+                "Entity '%s' execution of script 'set_action_%s' finished.",
                 self._attr_name,
                 action,
             )
