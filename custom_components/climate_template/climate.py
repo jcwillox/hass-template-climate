@@ -4,7 +4,7 @@ import logging
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.core import Context
+from homeassistant.core import Context, callback
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
@@ -13,18 +13,25 @@ from homeassistant.components.climate import (
 from homeassistant.components.climate.const import (
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
+    DEFAULT_MAX_HUMIDITY,
+    DEFAULT_MIN_HUMIDITY,
     ATTR_HVAC_MODE,
-    ATTR_FAN_MODE,
     ATTR_PRESET_MODE,
+    ATTR_FAN_MODE,
     ATTR_SWING_MODE,
     ATTR_CURRENT_TEMPERATURE,
     ATTR_CURRENT_HUMIDITY,
+    ATTR_HVAC_ACTION,
     ATTR_HUMIDITY,
+    ATTR_TARGET_TEMP_HIGH,
+    ATTR_TARGET_TEMP_LOW,
+    FAN_OFF,
     FAN_AUTO,
     FAN_LOW,
     FAN_MEDIUM,
     FAN_HIGH,
     SWING_OFF,
+    SWING_ON,
     PRESET_ACTIVITY,
     PRESET_AWAY,
     PRESET_BOOST,
@@ -32,15 +39,13 @@ from homeassistant.components.climate.const import (
     PRESET_ECO,
     PRESET_HOME,
     PRESET_SLEEP,
-    ATTR_TARGET_TEMP_HIGH,
-    ATTR_TARGET_TEMP_LOW,
     HVACMode,
     HVACAction,
 )
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
 from homeassistant.components.template.template_entity import TemplateEntity
+from homeassistant.exceptions import TemplateError
 from homeassistant.const import (
-    STATE_ON,
     PRECISION_HALVES,
     PRECISION_TENTHS,
     PRECISION_WHOLE,
@@ -57,23 +62,26 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
+
 _LOGGER = logging.getLogger(__name__)
 
-CONF_FAN_MODE_LIST = "fan_modes"
+CONF_HVAC_MODE_LIST = "hvac_modes"
 CONF_PRESET_MODE_LIST = "preset_modes"
-CONF_MODE_LIST = "modes"
+CONF_FAN_MODE_LIST = "fan_modes"
 CONF_SWING_MODE_LIST = "swing_modes"
-CONF_TEMP_MIN = "min_temp"
-CONF_TEMP_MAX = "max_temp"
+CONF_TEMPERATURE_MIN = "min_temp"
+CONF_TEMPERATURE_MAX = "max_temp"
+CONF_HUMIDITY_MIN = "min_humidity"
+CONF_HUMIDITY_MAX = "max_humidity"
 CONF_PRECISION = "precision"
-CONF_CURRENT_TEMP_TEMPLATE = "current_temperature_template"
 CONF_TEMP_STEP = "temp_step"
 
+CONF_CURRENT_TEMPERATURE_TEMPLATE = "current_temperature_template"
 CONF_CURRENT_HUMIDITY_TEMPLATE = "current_humidity_template"
-CONF_TARGET_HUMIDITY_TEMPLATE = "target_humidity_template"
 CONF_TARGET_TEMPERATURE_TEMPLATE = "target_temperature_template"
 CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE = "target_temperature_high_template"
 CONF_TARGET_TEMPERATURE_LOW_TEMPLATE = "target_temperature_low_template"
+CONF_TARGET_HUMIDITY_TEMPLATE = "target_humidity_template"
 CONF_HVAC_MODE_TEMPLATE = "hvac_mode_template"
 CONF_FAN_MODE_TEMPLATE = "fan_mode_template"
 CONF_PRESET_MODE_TEMPLATE = "preset_mode_template"
@@ -89,11 +97,14 @@ CONF_SET_SWING_MODE_ACTION = "set_swing_mode"
 CONF_MODE_ACTION = "mode_action"
 CONF_MAX_ACTION = "max_action"
 
-CONF_CLIMATES = "climates"
-
 DEFAULT_NAME = "Template Climate"
-DEFAULT_TEMP = 21
-DEFAULT_PRECISION = 1.0
+DEFAULT_TEMPERATURE = 21
+DEFAULT_HUMIDITY = 50
+DEFAULT_HVAC_MODE = HVACMode.OFF
+DEFAULT_PRESET_MODE = PRESET_COMFORT
+DEFAULT_FAN_MODE = FAN_LOW
+DEFAULT_SWING_MODE = SWING_OFF
+DEFAULT_TEMP_STEP = 1
 DEFAULT_MODE_ACTION = "single"
 DEFAULT_MAX_ACTION = 1
 DOMAIN = "climate_template"
@@ -108,7 +119,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
         vol.Optional(CONF_ICON_TEMPLATE): cv.template,
         vol.Optional(CONF_ENTITY_PICTURE_TEMPLATE): cv.template,
-        vol.Optional(CONF_CURRENT_TEMP_TEMPLATE): cv.template,
+        vol.Optional(CONF_CURRENT_TEMPERATURE_TEMPLATE): cv.template,
         vol.Optional(CONF_CURRENT_HUMIDITY_TEMPLATE): cv.template,
         vol.Optional(CONF_TARGET_HUMIDITY_TEMPLATE): cv.template,
         vol.Optional(CONF_TARGET_TEMPERATURE_TEMPLATE): cv.template,
@@ -126,41 +137,23 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_SET_PRESET_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_SWING_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(
-            CONF_MODE_LIST,
-            default=[
-                HVACMode.AUTO,
-                HVACMode.OFF,
-                HVACMode.COOL,
-                HVACMode.HEAT,
-                HVACMode.DRY,
-                HVACMode.FAN_ONLY,
-            ],
+            CONF_HVAC_MODE_LIST, default=[HVACMode.OFF, HVACMode.HEAT]
         ): cv.ensure_list,
-        vol.Optional(
-            CONF_FAN_MODE_LIST,
-            default=[FAN_AUTO, FAN_LOW, FAN_MEDIUM, FAN_HIGH],
-        ): cv.ensure_list,
-        vol.Optional(
-            CONF_PRESET_MODE_LIST,
-            default=[
-                PRESET_ECO,
-                PRESET_AWAY,
-                PRESET_BOOST,
-                PRESET_COMFORT,
-                PRESET_HOME,
-                PRESET_SLEEP,
-                PRESET_ACTIVITY,
-            ],
-        ): cv.ensure_list,
-        vol.Optional(
-            CONF_SWING_MODE_LIST, default=[STATE_ON, HVACMode.OFF]
-        ): cv.ensure_list,
-        vol.Optional(CONF_TEMP_MIN, default=DEFAULT_MIN_TEMP): vol.Coerce(float),
-        vol.Optional(CONF_TEMP_MAX, default=DEFAULT_MAX_TEMP): vol.Coerce(float),
+        vol.Optional(CONF_PRESET_MODE_LIST, default=[]): cv.ensure_list,
+        vol.Optional(CONF_FAN_MODE_LIST, default=[]): cv.ensure_list,
+        vol.Optional(CONF_SWING_MODE_LIST, default=[]): cv.ensure_list,
+        vol.Optional(CONF_TEMPERATURE_MIN, default=DEFAULT_MIN_TEMP): vol.Coerce(float),
+        vol.Optional(CONF_TEMPERATURE_MAX, default=DEFAULT_MAX_TEMP): vol.Coerce(float),
+        vol.Optional(CONF_HUMIDITY_MIN, default=DEFAULT_MIN_HUMIDITY): vol.Coerce(
+            float
+        ),
+        vol.Optional(CONF_HUMIDITY_MAX, default=DEFAULT_MAX_HUMIDITY): vol.Coerce(
+            float
+        ),
         vol.Optional(CONF_PRECISION): vol.In(
             [PRECISION_TENTHS, PRECISION_HALVES, PRECISION_WHOLE]
         ),
-        vol.Optional(CONF_TEMP_STEP, default=DEFAULT_PRECISION): vol.Coerce(float),
+        vol.Optional(CONF_TEMP_STEP, default=DEFAULT_TEMP_STEP): vol.Coerce(float),
         vol.Optional(CONF_UNIQUE_ID): cv.string,
     }
 )
@@ -176,6 +169,8 @@ async def async_setup_platform(
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     """A template climate component."""
 
+    _attr_should_poll = False
+
     def __init__(self, hass: HomeAssistantType, config: ConfigType):
         """Initialize the climate device."""
         super().__init__(
@@ -185,584 +180,1079 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
         )
         self._config = config
-        self._attr_unique_id = config.get(CONF_UNIQUE_ID, None)
-        self._attr_name = config[CONF_NAME]
-        self._attr_mode_action = config[CONF_MODE_ACTION]
-        self._attr_max_action = config[CONF_MAX_ACTION]
-        self._attr_min_temp = config[CONF_TEMP_MIN]
-        self._attr_max_temp = config[CONF_TEMP_MAX]
-        self._attr_target_temperature_step = config[CONF_TEMP_STEP]
-
-        self._current_temp = None
-        self._current_humidity = None
-
-        self._current_fan_mode = FAN_LOW  # default optimistic state
-        self._current_preset_mode = PRESET_COMFORT  # default optimistic state
-        self._current_operation = HVACMode.OFF  # default optimistic state
-        self._current_swing_mode = HVACMode.OFF  # default optimistic state
-        self._target_temp = DEFAULT_TEMP  # default optimistic state
-        self._target_humidity = None
-        self._attr_target_temperature_high = None
-        self._attr_target_temperature_low = None
-
-        self._current_temp_template = config.get(CONF_CURRENT_TEMP_TEMPLATE)
-        self._current_humidity_template = config.get(CONF_CURRENT_HUMIDITY_TEMPLATE)
-        self._target_temperature_template = config.get(CONF_TARGET_TEMPERATURE_TEMPLATE)
-        self._target_humidity_template = config.get(CONF_TARGET_HUMIDITY_TEMPLATE)
-        self._target_temperature_high_template = config.get(
-            CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE
-        )
-        self._target_temperature_low_template = config.get(
-            CONF_TARGET_TEMPERATURE_LOW_TEMPLATE
-        )
-        self._hvac_mode_template = config.get(CONF_HVAC_MODE_TEMPLATE)
-        self._fan_mode_template = config.get(CONF_FAN_MODE_TEMPLATE)
-        self._preset_mode_template = config.get(CONF_PRESET_MODE_TEMPLATE)
-        self._swing_mode_template = config.get(CONF_SWING_MODE_TEMPLATE)
-        self._hvac_action_template = config.get(CONF_HVAC_ACTION_TEMPLATE)
-
-        self._available = True
-        self._unit_of_measurement = hass.config.units.temperature_unit
-        self._attr_supported_features = 0
         self._enable_turn_on_off_backwards_compatibility = False
-        self._last_on_operation = None
 
-        self._attr_hvac_modes = config[CONF_MODE_LIST]
-        self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
-        self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
-        self._swing_modes_list = config[CONF_SWING_MODE_LIST]
-
-        self.entity_id = async_generate_entity_id(
+        self._attr_name = config[CONF_NAME]
+        self._attr_entity_id = async_generate_entity_id(
             ENTITY_ID_FORMAT, config[CONF_NAME], hass=hass
         )
+        self._attr_unique_id = config.get(CONF_UNIQUE_ID, None)
+        self._attr_supported_features = 0
+        self._attr_temperature_unit = hass.config.units.temperature_unit
+        self._attr_target_temperature_step = config[CONF_TEMP_STEP]
+        self._attr_mode_action = config[CONF_MODE_ACTION]
+        self._attr_max_action = config[CONF_MAX_ACTION]
+        self._attr_min_temp = config[CONF_TEMPERATURE_MIN]
+        self._attr_max_temp = config[CONF_TEMPERATURE_MAX]
+        self._attr_min_humidity = config[CONF_HUMIDITY_MIN]
+        self._attr_max_humidity = config[CONF_HUMIDITY_MAX]
+        self._attr_hvac_modes = list(
+            map(lambda item: str(item), config[CONF_HVAC_MODE_LIST]),
+        )
+        self._attr_fan_modes = list(
+            map(lambda item: str(item), config[CONF_FAN_MODE_LIST]),
+        )
+        self._attr_preset_modes = list(
+            map(lambda item: str(item), config[CONF_PRESET_MODE_LIST]),
+        )
+        self._attr_swing_modes = list(
+            map(lambda item: str(item), config[CONF_SWING_MODE_LIST]),
+        )
+        self._attr_current_temperature = None
+        self._attr_current_humidity = None
+        self._attr_hvac_action = None
+        self._attr_hvac_mode = DEFAULT_HVAC_MODE
+        self._attr_preset_mode = DEFAULT_PRESET_MODE
+        self._attr_fan_mode = DEFAULT_FAN_MODE
+        self._attr_swing_mode = DEFAULT_SWING_MODE
+        self._attr_target_temperature = DEFAULT_TEMPERATURE
+        self._attr_target_temperature_low = DEFAULT_TEMPERATURE
+        self._attr_target_temperature_high = DEFAULT_TEMPERATURE
+        self._attr_target_humidity = DEFAULT_HUMIDITY
 
-        # set supported features to enable turn_on and turn_off services
-        if HVACMode.OFF in self._attr_hvac_modes and len(self._attr_hvac_modes) >= 2:
-            self._attr_supported_features |= (
-                ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON
+        self._off_mode = {}
+        self._last_on_mode = {}
+
+        self._template_hvac_action = config.get(CONF_HVAC_ACTION_TEMPLATE)
+        self._template_hvac_mode = config.get(CONF_HVAC_MODE_TEMPLATE)
+        self._template_preset_mode = config.get(CONF_PRESET_MODE_TEMPLATE)
+        self._template_fan_mode = config.get(CONF_FAN_MODE_TEMPLATE)
+        self._template_swing_mode = config.get(CONF_SWING_MODE_TEMPLATE)
+        self._template_current_temperature = config.get(
+            CONF_CURRENT_TEMPERATURE_TEMPLATE
+        )
+        self._template_current_humidity = config.get(
+            CONF_CURRENT_HUMIDITY_TEMPLATE,
+        )
+        self._template_target_temperature = config.get(
+            CONF_TARGET_TEMPERATURE_TEMPLATE,
+        )
+        self._template_target_temperature_low = config.get(
+            CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
+        )
+        self._template_target_temperature_high = config.get(
+            CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE,
+        )
+        self._template_target_humidity = config.get(CONF_TARGET_HUMIDITY_TEMPLATE)
+
+        self._action_hvac_mode = config.get(CONF_SET_HVAC_MODE_ACTION)
+        self._action_preset_mode = config.get(CONF_SET_PRESET_MODE_ACTION)
+        self._action_fan_mode = config.get(CONF_SET_FAN_MODE_ACTION)
+        self._action_swing_mode = config.get(CONF_SET_SWING_MODE_ACTION)
+        self._action_temperature = config.get(CONF_SET_TEMPERATURE_ACTION)
+        self._action_humidity = config.get(CONF_SET_HUMIDITY_ACTION)
+
+        # Set scripts callbacks.
+        self._script_hvac_mode = None
+        self._script_preset_mode = None
+        self._script_fan_mode = None
+        self._script_swing_mode = None
+        self._script_temperature = None
+        self._script_humidity = None
+
+        # Check config entries and set entity supported features flags.
+        if self._attr_hvac_modes and len(self._attr_hvac_modes) > 0:
+            if (
+                HVACMode.OFF in self._attr_hvac_modes
+                and len(self._attr_hvac_modes) >= 2
+            ):
+                self._off_mode["hvac_mode"] = HVACMode.OFF
+                self._attr_supported_features |= (
+                    ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON
+                )
+                if HVACMode.AUTO in self._attr_hvac_modes:
+                    self._last_on_mode["hvac_mode"] = HVACMode.AUTO
+                elif len(self._attr_hvac_modes) == 2:
+                    self._last_on_mode["hvac_mode"] = list(
+                        filter(lambda item: item != HVACMode.OFF, self._attr_hvac_modes)
+                    )[0]
+                else:
+                    self._last_on_mode["hvac_mode"] = HVACMode.OFF
+        else:
+            _LOGGER.error(
+                "Entity '%s' has no hvac mode, at least one hvac mode shall be configured!",
+                self._attr_name,
             )
-            if HVACMode.AUTO in self._attr_hvac_modes:
-                self._last_on_operation = HVACMode.AUTO
-            elif len(self._attr_hvac_modes) == 2:
-                self._last_on_operation = list(
-                    filter(lambda item: item != HVACMode.OFF, self._attr_hvac_modes)
-                )[0]
+            return False
+
+        if self._attr_preset_modes and len(self._attr_preset_modes) >= 2:
+            if self._action_preset_mode or self._template_preset_mode:
+                self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
             else:
-                self._last_on_operation = HVACMode.OFF
-
-        # set script variables
-        self._set_hvac_mode_script = None
-        set_hvac_mode_action = config.get(CONF_SET_HVAC_MODE_ACTION)
-        if set_hvac_mode_action:
-            self._set_hvac_mode_script = Script(
-                hass,
-                set_hvac_mode_action,
+                _LOGGER.warning(
+                    "Entity '%s' has preset mode configured, but there is neither action '%s' nor template '%s' configured.",
+                    self._attr_name,
+                    CONF_SET_PRESET_MODE_ACTION,
+                    CONF_PRESET_MODE_TEMPLATE,
+                )
+                self._attr_preset_modes = []
+        elif self._action_preset_mode or self._template_preset_mode:
+            _LOGGER.warning(
+                "Entity '%s' has no preset mode configured, but there is action '%s' and/or template '%s' configured.",
                 self._attr_name,
-                DOMAIN,
-                script_mode=self._attr_mode_action,
-                max_runs=self._attr_max_action,
+                CONF_SET_PRESET_MODE_ACTION,
+                CONF_PRESET_MODE_TEMPLATE,
             )
+            self._action_preset_mode = None
+            self._template_preset_mode = None
 
-        self._set_swing_mode_script = None
-        set_swing_mode_action = config.get(CONF_SET_SWING_MODE_ACTION)
-        if set_swing_mode_action:
-            self._set_swing_mode_script = Script(
-                hass,
-                set_swing_mode_action,
+        if self._attr_fan_modes and len(self._attr_fan_modes) >= 2:
+            if self._action_fan_mode or self._template_fan_mode:
+                self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
+            else:
+                _LOGGER.warning(
+                    "Entity '%s' has fan mode configured, but there is neither action '%s' nor template '%s' configured.",
+                    self._attr_name,
+                    CONF_SET_FAN_MODE_ACTION,
+                    CONF_FAN_MODE_TEMPLATE,
+                )
+                self._attr_fan_modes = []
+        elif self._action_fan_mode or self._template_fan_mode:
+            _LOGGER.warning(
+                "Entity '%s' has not fan mode configured, but there is action '%s' and/or template '%s' configured.",
                 self._attr_name,
-                DOMAIN,
-                script_mode=self._attr_mode_action,
-                max_runs=self._attr_max_action,
+                CONF_SET_FAN_MODE_ACTION,
+                CONF_FAN_MODE_TEMPLATE,
             )
-            self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
+            self._action_fan_mode = None
+            self._template_fan_mode = None
 
-        self._set_fan_mode_script = None
-        set_fan_mode_action = config.get(CONF_SET_FAN_MODE_ACTION)
-        if set_fan_mode_action:
-            self._set_fan_mode_script = Script(
-                hass,
-                set_fan_mode_action,
+        if self._attr_swing_modes and len(self._attr_swing_modes) >= 2:
+            if self._action_swing_mode or self._template_swing_mode:
+                self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
+            else:
+                _LOGGER.warning(
+                    "Entity '%s' has swing mode configured, but there is neither action '%s' nor template '%s' configured.",
+                    self._attr_name,
+                    CONF_SET_SWING_MODE_ACTION,
+                    CONF_SWING_MODE_TEMPLATE,
+                )
+                self._attr_swing_modes = []
+        elif self._action_swing_mode or self._template_swing_mode:
+            _LOGGER.warning(
+                "Entity '%s' has no swing mode configured, but there is action '%s' and/or template '%s' configured.",
                 self._attr_name,
-                DOMAIN,
-                script_mode=self._attr_mode_action,
-                max_runs=self._attr_max_action,
+                CONF_SET_SWING_MODE_ACTION,
+                CONF_SWING_MODE_TEMPLATE,
             )
-            self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
+            self._action_swing_mode = None
+            self._template_swing_mode = None
 
-        self._set_preset_mode_script = None
-        set_preset_mode_action = config.get(CONF_SET_PRESET_MODE_ACTION)
-        if set_preset_mode_action:
-            self._set_preset_mode_script = Script(
-                hass, set_preset_mode_action, self._attr_name, DOMAIN
-            )
-            self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
-
-        self._set_temperature_script = None
-        set_temperature_action = config.get(CONF_SET_TEMPERATURE_ACTION)
-        if set_temperature_action:
-            self._set_temperature_script = Script(
-                hass,
-                set_temperature_action,
-                self._attr_name,
-                DOMAIN,
-                script_mode=self._attr_mode_action,
-                max_runs=self._attr_max_action,
-            )
-            if HVACMode.HEAT_COOL in self._attr_hvac_modes:
+        if HVACMode.HEAT_COOL in self._attr_hvac_modes:
+            if (
+                not self._template_target_temperature_high
+                and self._template_target_temperature_low
+            ) or (
+                not self._template_target_temperature_low
+                and self._template_target_temperature_high
+            ):
+                _LOGGER.warning(
+                    "Entity '%s' shall have either both templates '%s' and '%s' configured or none of them.",
+                    self._attr_name,
+                    CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
+                    CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE,
+                )
+                self._template_target_temperature_low = None
+                self._template_target_temperature_high = None
+            if self._action_temperature or (
+                self._template_target_temperature_low
+                and self._template_target_temperature_high
+            ):
                 self._attr_supported_features |= (
                     ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
                 )
-                if HVACMode.OFF in self._attr_hvac_modes:
-                    if len(self._attr_hvac_modes) > 2:
-                        # when heat_cool and off are not the only modes
-                        self._attr_supported_features |= (
-                            ClimateEntityFeature.TARGET_TEMPERATURE
-                        )
-                elif len(self._attr_hvac_modes) > 1:
-                    # when heat_cool is not the only mode
-                    self._attr_supported_features |= (
-                        ClimateEntityFeature.TARGET_TEMPERATURE
-                    )
             else:
-                self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
+                _LOGGER.warning(
+                    "Entity '%s' has hvac mode heat_cool configured, but there is no action neither template for high or low temperature configued.",
+                    self._attr_name,
+                )
+        else:
+            if (
+                self._template_target_temperature_low
+                or self._template_target_temperature_high
+            ):
+                _LOGGER.warning(
+                    "Entity '%s' has no Hvac mode heat_cool configured, but there is '%s' and/or '%s' template configured.",
+                    self._attr_name,
+                    CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
+                    CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE,
+                )
+                self._template_target_temperature_low = None
+                self._template_target_temperature_high = None
 
-        self._set_humidity_script = None
-        set_humidity_action = config.get(CONF_SET_HUMIDITY_ACTION)
-        if set_humidity_action:
-            self._set_humidity_script = Script(
-                hass, set_humidity_action, self._attr_name, DOMAIN
+        if any(
+            list(
+                map(
+                    lambda var: var in self._attr_hvac_modes,
+                    [HVACMode.AUTO, HVACMode.HEAT, HVACMode.COOL],
+                )
             )
-            self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
+        ):
+            if self._action_temperature or self._template_target_temperature:
+                self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
+            else:
+                _LOGGER.warning(
+                    "Entity '%s' has hvac mode auto, heat or cool configured, but there is no action neither template for temperature configued.",
+                    self._attr_name,
+                )
+        else:
+            if self._action_temperature:
+                _LOGGER.warning(
+                    "Entity '%s' has no hvac mode auto, heat or cool configured, but there is action '%s' configured.",
+                    self._attr_name,
+                    CONF_SET_TEMPERATURE_ACTION,
+                )
+                self._action_temperature = None
+            if self._template_target_temperature:
+                _LOGGER.warning(
+                    "Entity '%s' has no hvac mode auto, heat or cool configured, but there is template '%s' configured.",
+                    self._attr_name,
+                    CONF_TARGET_TEMPERATURE_TEMPLATE,
+                )
+                self._template_target_temperature = None
+
+        if HVACMode.DRY in self._attr_hvac_modes:
+            if self._action_humidity or self._template_target_humidity:
+                self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
+            else:
+                _LOGGER.warning(
+                    "Entity '%s' has hvac mode dry configured, but there is no '%s' action neither '%s' template configured.",
+                    self._attr_name,
+                    CONF_SET_HUMIDITY_ACTION,
+                    CONF_TARGET_HUMIDITY_TEMPLATE,
+                )
+        else:
+            if self._action_humidity:
+                _LOGGER.warning(
+                    "Entity '%s' has no hvac mode dry configured, but there is action '%s' configured.",
+                    self._attr_name,
+                    CONF_SET_HUMIDITY_ACTION,
+                )
+                self._action_humidity = None
+            if self._template_target_humidity:
+                _LOGGER.warning(
+                    "Entity '%s' has no hvac mode dry configured, but there is template '%s' configured.",
+                    self._attr_name,
+                    CONF_TARGET_HUMIDITY_TEMPLATE,
+                )
+                self._action_humidity = None
+
+        if self._action_hvac_mode:
+            self._script_hvac_mode = Script(
+                hass,
+                self._action_hvac_mode,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
+            )
+
+        if self._action_preset_mode:
+            self._script_preset_mode = Script(
+                hass,
+                self._action_preset_mode,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
+            )
+
+        if self._action_fan_mode:
+            self._script_fan_mode = Script(
+                hass,
+                self._action_fan_mode,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
+            )
+
+        if self._action_swing_mode:
+            self._script_swing_mode = Script(
+                hass,
+                self._action_swing_mode,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
+            )
+
+        if self._action_temperature:
+            self._script_temperature = Script(
+                hass,
+                self._action_temperature,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
+            )
+
+        if self._action_humidity:
+            self._script_humidity = Script(
+                hass,
+                self._action_humidity,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
+            )
 
     async def async_added_to_hass(self):
         """Run when entity about to be added."""
         await super().async_added_to_hass()
 
-        # Check If we have an old state
+        # Check if we have an previous stored state and use it as default state.
         previous_state = await self.async_get_last_state()
         if previous_state is not None:
-            if previous_state.state in self._attr_hvac_modes:
-                self._current_operation = previous_state.state
-
-            if temperature := previous_state.attributes.get(
-                ATTR_TEMPERATURE, DEFAULT_TEMP
-            ):
-                self._target_temp = float(temperature)
-            if temperature_high := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH):
-                self._attr_target_temperature_high = float(temperature_high)
-            if temperature_low := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW):
-                self._attr_target_temperature_low = float(temperature_low)
-
-            self._current_fan_mode = previous_state.attributes.get(
-                ATTR_FAN_MODE, FAN_LOW
-            )
-            self._current_preset_mode = previous_state.attributes.get(
-                ATTR_PRESET_MODE, PRESET_COMFORT
-            )
-            self._current_swing_mode = previous_state.attributes.get(
-                ATTR_SWING_MODE, SWING_OFF
+            _LOGGER.debug(
+                "Entity '%s' restoring previously stored attributes.",
+                self._attr_name,
             )
 
-            if current_temperature := previous_state.attributes.get(
-                ATTR_CURRENT_TEMPERATURE
-            ):
-                self._current_temp = float(current_temperature)
+            if (
+                hvac_mode := self._validate_value(
+                    "hvac_mode", previous_state.state, self._attr_hvac_modes
+                )
+            ) is not None:
+                self._attr_hvac_mode = hvac_mode
 
-            if humidity := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY):
-                self._current_humidity = humidity
+            if (value := previous_state.attributes.get(ATTR_PRESET_MODE)) is not None:
+                if (
+                    preset_mode := self._validate_value(
+                        "preset_mode",
+                        value,
+                        self._attr_preset_modes,
+                    )
+                ) is not None:
+                    self._attr_preset_mode = preset_mode
 
-            if "last_on_operation" in previous_state.attributes:
-                self._last_on_operation = previous_state.attributes["last_on_operation"]
+            if (value := previous_state.attributes.get(ATTR_FAN_MODE)) is not None:
+                if (
+                    fan_mode := self._validate_value(
+                        "fan_mode",
+                        value,
+                        self._attr_fan_modes,
+                    )
+                ) is not None:
+                    self._attr_fan_mode = fan_mode
 
-        # register templates
-        if self._current_temp_template:
+            if (value := previous_state.attributes.get(ATTR_SWING_MODE)) is not None:
+                if (
+                    swing_mode := self._validate_value(
+                        "swing_mode",
+                        value,
+                        self._attr_swing_modes,
+                    )
+                ) is not None:
+                    self._attr_swing_mode = swing_mode
+
+            if (value := previous_state.attributes.get(ATTR_TEMPERATURE)) is not None:
+                if (
+                    target_temperature := self._validate_value(
+                        "target_temperature",
+                        value,
+                        "target_temperature",
+                    )
+                ) is not None:
+                    self._attr_target_temperature = target_temperature
+
+            if (
+                value := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW)
+            ) is not None:
+                if (
+                    target_temperature_low := self._validate_value(
+                        "target_temperature_low",
+                        value,
+                        "target_temperature",
+                    )
+                ) is not None:
+                    self._attr_target_temperature_low = target_temperature_low
+
+            if (
+                value := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH)
+            ) is not None:
+                if (
+                    target_temperature_high := self._validate_value(
+                        "target_temperature_high",
+                        value,
+                        "target_temperature",
+                    )
+                ) is not None:
+                    self._attr_target_temperature_high = target_temperature_high
+
+            if (value := previous_state.attributes.get(ATTR_HUMIDITY)) is not None:
+                if (
+                    target_humidity := self._validate_value(
+                        "target_humidity",
+                        value,
+                        "target_humidity",
+                    )
+                ) is not None:
+                    self._target_humidity = target_humidity
+
+            if (
+                value := previous_state.attributes.get(ATTR_CURRENT_TEMPERATURE)
+            ) is not None:
+                if (
+                    current_temperature := self._validate_value(
+                        "current_temperature",
+                        value,
+                        "current_temperature",
+                    )
+                ) is not None:
+                    self._attr_current_temperature = current_temperature
+
+            if (
+                value := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY)
+            ) is not None:
+                if (
+                    current_humidity := self._validate_value(
+                        "current_humidity",
+                        value,
+                        "current_humidity",
+                    )
+                ) is not None:
+                    self._attr_current_humidity = current_humidity
+
+            if (value := previous_state.attributes.get(ATTR_HVAC_ACTION)) is not None:
+                if (
+                    hvac_action := self._validate_value(
+                        "hvac_action",
+                        value,
+                        [member.value for member in HVACAction],
+                    )
+                ) is not None:
+                    self._attr_hvac_action = hvac_action
+
+            if (value := previous_state.attributes.get("last_on_mode")) is not None:
+                for mode in value.keys():
+                    self._last_on_mode[mode] = value[mode]
+
+        _LOGGER.debug(
+            "Entity '%s' registering templates callbacks.",
+            self._attr_name,
+        )
+
+        # Register templates callback.
+        if self._template_hvac_mode:
             self.add_template_attribute(
-                "_current_temp",
-                self._current_temp_template,
-                None,
-                self._update_current_temp,
-                none_on_template_error=True,
-            )
-
-        if self._current_humidity_template:
-            self.add_template_attribute(
-                "_current_humidity",
-                self._current_humidity_template,
-                None,
-                self._update_current_humidity,
-                none_on_template_error=True,
-            )
-
-        if self._target_temperature_template:
-            self.add_template_attribute(
-                "_target_temp",
-                self._target_temperature_template,
-                None,
-                self._update_target_temp,
-                none_on_template_error=True,
-            )
-
-        if self._target_humidity_template:
-            self.add_template_attribute(
-                "_target_humidity",
-                self._target_humidity_template,
-                None,
-                self._update_target_humidity,
-                none_on_template_error=True,
-            )
-
-        if self._target_temperature_high_template:
-            self.add_template_attribute(
-                "_attr_target_temperature_high",
-                self._target_temperature_high_template,
-                None,
-                self._update_target_temp_high,
-                none_on_template_error=True,
-            )
-
-        if self._target_temperature_low_template:
-            self.add_template_attribute(
-                "_attr_target_temperature_low",
-                self._target_temperature_low_template,
-                None,
-                self._update_target_temp_low,
-                none_on_template_error=True,
-            )
-
-        if self._hvac_mode_template:
-            self.add_template_attribute(
-                "_current_operation",
-                self._hvac_mode_template,
+                "_hvac_mode",
+                self._template_hvac_mode,
                 None,
                 self._update_hvac_mode,
                 none_on_template_error=True,
             )
-        if self._preset_mode_template:
+
+        if self._template_preset_mode:
             self.add_template_attribute(
-                "_current_preset_mode",
-                self._preset_mode_template,
+                "_preset_mode",
+                self._template_preset_mode,
                 None,
                 self._update_preset_mode,
                 none_on_template_error=True,
             )
 
-        if self._fan_mode_template:
+        if self._template_fan_mode:
             self.add_template_attribute(
-                "_current_fan_mode",
-                self._fan_mode_template,
+                "_fan_mode",
+                self._template_fan_mode,
                 None,
                 self._update_fan_mode,
                 none_on_template_error=True,
             )
 
-        if self._swing_mode_template:
+        if self._template_swing_mode:
             self.add_template_attribute(
-                "_current_swing_mode",
-                self._swing_mode_template,
+                "_swing_mode",
+                self._template_swing_mode,
                 None,
                 self._update_swing_mode,
                 none_on_template_error=True,
             )
 
-        if self._hvac_action_template:
+        if self._template_target_temperature:
+            self.add_template_attribute(
+                "_target_temperature",
+                self._template_target_temperature,
+                None,
+                self._update_target_temperature,
+                none_on_template_error=True,
+            )
+
+        if self._template_target_temperature_high:
+            self.add_template_attribute(
+                "_target_temperature_high",
+                self._template_target_temperature_high,
+                None,
+                self._update_target_temperature_high,
+                none_on_template_error=True,
+            )
+
+        if self._template_target_temperature_low:
+            self.add_template_attribute(
+                "_target_temperature_low",
+                self._template_target_temperature_low,
+                None,
+                self._update_target_temperature_low,
+                none_on_template_error=True,
+            )
+
+        if self._template_target_humidity:
+            self.add_template_attribute(
+                "_target_humidity",
+                self._template_target_humidity,
+                None,
+                self._update_target_humidity,
+                none_on_template_error=True,
+            )
+
+        if self._template_current_temperature:
+            self.add_template_attribute(
+                "_current_temperature",
+                self._template_current_temperature,
+                None,
+                self._update_current_temperature,
+                none_on_template_error=True,
+            )
+
+        if self._template_current_humidity:
+            self.add_template_attribute(
+                "_current_humidity",
+                self._template_current_humidity,
+                None,
+                self._update_current_humidity,
+                none_on_template_error=True,
+            )
+
+        if self._template_hvac_action:
             self.add_template_attribute(
                 "_hvac_action",
-                self._hvac_action_template,
+                self._template_hvac_action,
                 None,
                 self._update_hvac_action,
                 none_on_template_error=True,
             )
 
-    def _update_current_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            try:
-                self._current_temp = float(temp)
-            except ValueError:
-                _LOGGER.error("Could not parse temperature from %s", temp)
+        _LOGGER.debug(
+            "Entity '%s' succesfully registered to homeassistant.",
+            self._attr_name,
+        )
 
-    def _update_current_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            try:
-                self._current_humidity = float(humidity)
-            except ValueError:
-                _LOGGER.error("Could not parse humidity from %s", humidity)
-
-    def _update_target_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            try:
-                self._target_temp = float(temp)
-                self.hass.async_create_task(
-                    self.async_set_temperature(**{ATTR_TEMPERATURE: self._target_temp})
-                )
-            except ValueError:
-                _LOGGER.error("Could not parse temperature from %s", temp)
-
-    def _update_target_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            try:
-                self._target_humidity = float(humidity)
-                self.hass.async_create_task(
-                    self.async_set_humidity(**{ATTR_HUMIDITY: self._target_humidity})
-                )
-            except ValueError:
-                _LOGGER.error("Could not parse humidity from %s", humidity)
-
-    def _update_target_temp_high(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            try:
-                self._attr_target_temperature_high = float(temp)
-                self.hass.async_create_task(
-                    self.async_set_temperature(
-                        **{ATTR_TARGET_TEMP_HIGH: self._attr_target_temperature_high}
+    def _validate_value(self, attr, value, format):
+        if value is None:
+            _LOGGER.error(
+                "Entity '%s' attribute '%s' returned value: 'None'.",
+                self._attr_name,
+                attr,
+            )
+            return None
+        elif isinstance(value, TemplateError):
+            _LOGGER.error(
+                "Entity '%s' attribute '%s' returned exception: '%s'.",
+                self._attr_name,
+                attr,
+                value,
+            )
+            return None
+        elif value in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            _LOGGER.debug(
+                "Entity '%s' attribute '%s' returned Uknown or Unavailable: '%s'.",
+                self._attr_name,
+                attr,
+                value,
+            )
+            return None
+        elif format is not None:
+            if type(format) is list or type(format) is dict:
+                value = str(value)
+                if value not in format:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected one of: '%s'.",
+                        self._attr_name,
+                        attr,
+                        value,
+                        format,
                     )
-                )
-            except ValueError:
-                _LOGGER.error("Could not parse temperature high from %s", temp)
-
-    def _update_target_temp_low(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            try:
-                self._attr_target_temperature_low = float(temp)
-                self.hass.async_create_task(
-                    self.async_set_temperature(
-                        **{ATTR_TARGET_TEMP_LOW: self._attr_target_temperature_low}
+                    return None
+            elif format == "current_temperature":
+                try:
+                    if self.precision == PRECISION_HALVES:
+                        value = round(float(value) / 0.5) * 0.5
+                    elif self.precision == PRECISION_TENTHS:
+                        value = round(float(value), 1)
+                    else:
+                        value = round(float(value))
+                except ValueError:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer of float.",
+                        self._attr_name,
+                        attr,
+                        value,
                     )
+                    return None
+            elif format == "target_temperature":
+                try:
+                    value = (
+                        round(float(value) / self._attr_target_temperature_step)
+                        * self._attr_target_temperature_step
+                    )
+                except ValueError:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer or float.",
+                        self._attr_name,
+                        attr,
+                        value,
+                    )
+                    return None
+                if value > self._attr_max_temp:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s', which is bigger than max setpoint: '%s'.",
+                        self._attr_name,
+                        attr,
+                        value,
+                        self._attr_max_temp,
+                    )
+                    return None
+                if value < self._attr_min_temp:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s', which is smaller than min setpoint: '%s'.",
+                        self._attr_name,
+                        attr,
+                        value,
+                        self._attr_min_temp,
+                    )
+                    return None
+            elif format == "curent_humidity":
+                try:
+                    value = round(value)
+                except ValueError:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer of float.",
+                        self._attr_name,
+                        attr,
+                        value,
+                    )
+                    return None
+            elif format == "target_humidity":
+                try:
+                    value = round(value)
+                except ValueError:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%'s. Expected integer of float.",
+                        self._attr_name,
+                        attr,
+                        value,
+                    )
+                    return None
+                if value > self._attr_max_humidity:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s', which is bigger than max setpoint: '%s'.",
+                        self._attr_name,
+                        attr,
+                        value,
+                        self._attr_max_humidity,
+                    )
+                    return None
+                if value < self._attr_min_humidity:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s', which is smaller than min setpoint: '%s'.",
+                        self._attr_name,
+                        attr,
+                        value,
+                        self._attr_min_humidity,
+                    )
+                    return None
+            else:
+                _LOGGER.debug(
+                    "Entity '%s' attribute '%s' test called with invalid format: '%s'.",
+                    self._attr_name,
+                    attr,
+                    format,
                 )
-            except ValueError:
-                _LOGGER.error("Could not parse temperature low from %s", temp)
 
-    def _update_hvac_mode(self, hvac_mode):
-        if hvac_mode in self._attr_hvac_modes:
-            self._current_operation = hvac_mode
-            self.hass.async_create_task(self.async_set_hvac_mode(hvac_mode))
-        elif hvac_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            _LOGGER.error(
-                "Received invalid hvac mode: %s. Expected: %s.",
-                hvac_mode,
-                self._attr_hvac_modes,
-            )
+        _LOGGER.debug(
+            "Entity '%s' attribute '%s' triggered update with value: '%s'.",
+            self._attr_name,
+            attr,
+            value,
+        )
+        return value
 
-    def _update_preset_mode(self, preset_mode):
-        if preset_mode in self._attr_preset_modes:
-            self._current_preset_mode = preset_mode
-            self.hass.async_create_task(self.async_set_preset_mode(preset_mode))
-        elif preset_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            _LOGGER.error(
-                "Received invalid preset mode %s. Expected %s.",
-                preset_mode,
-                self._attr_preset_modes,
-            )
+    @callback
+    def _update_hvac_mode(self, hvac_mode: str):
+        self.hass.async_create_task(
+            self._async_set_attribute(
+                "hvac_mode",
+                {
+                    "hvac_mode": {
+                        "attr": ATTR_HVAC_MODE,
+                        "value": hvac_mode,
+                        "format": self._attr_hvac_modes,
+                    }
+                },
+            ),
+        )
 
-    def _update_fan_mode(self, fan_mode):
-        if fan_mode in self._attr_fan_modes:
-            self._current_fan_mode = fan_mode
-            self.hass.async_create_task(self.async_set_fan_mode(fan_mode))
-        elif fan_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            _LOGGER.error(
-                "Received invalid fan mode: %s. Expected: %s.",
-                fan_mode,
-                self._attr_fan_modes,
-            )
+    @callback
+    def _update_preset_mode(self, preset_mode: str):
+        self.hass.async_create_task(
+            self._async_set_attribute(
+                "preset_mode",
+                {
+                    "preset_mode": {
+                        "attr": ATTR_PRESET_MODE,
+                        "value": preset_mode,
+                        "format": self._attr_preset_modes,
+                    }
+                },
+            ),
+        )
 
-    def _update_swing_mode(self, swing_mode):
-        if swing_mode in self._swing_modes_list:
-            # check swing mode actually changed
-            if self._current_swing_mode != swing_mode:
-                self._current_swing_mode = swing_mode
-                self.hass.async_create_task(self.async_set_swing_mode(swing_mode))
-        elif swing_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            _LOGGER.error(
-                "Received invalid swing mode: %s. Expected: %s.",
-                swing_mode,
-                self._swing_modes_list,
-            )
+    @callback
+    def _update_fan_mode(self, fan_mode: str):
+        self.hass.async_create_task(
+            self._async_set_attribute(
+                "fan_mode",
+                {
+                    "fan_mode": {
+                        "attr": ATTR_FAN_MODE,
+                        "value": fan_mode,
+                        "format": self._attr_fan_modes,
+                    }
+                },
+            ),
+        )
 
-    def _update_hvac_action(self, hvac_action):
+    @callback
+    def _update_swing_mode(self, swing_mode: str):
+        self.hass.async_create_task(
+            self._async_set_attribute(
+                "swing_mode",
+                {
+                    "swing_mode": {
+                        "attr": ATTR_SWING_MODE,
+                        "value": swing_mode,
+                        "format": self._attr_swing_modes,
+                    }
+                },
+            ),
+        )
+
+    @callback
+    def _update_target_temperature(self, target_temperature: float):
+        self.hass.async_create_task(
+            self._async_set_attribute(
+                "temperature",
+                {
+                    "target_temperature": {
+                        "attr": ATTR_TEMPERATURE,
+                        "value": target_temperature,
+                        "format": "target_temperature",
+                    }
+                },
+            ),
+        )
+
+    @callback
+    def _update_target_temperature_low(self, target_temperature_low: float):
+        self.hass.async_create_task(
+            self._async_set_attribute(
+                "temperature",
+                {
+                    "target_temperature_low": {
+                        "attr": ATTR_TARGET_TEMP_LOW,
+                        "value": target_temperature_low,
+                        "format": "target_temperature",
+                    },
+                    "target_temperature_high": {
+                        "attr": ATTR_TARGET_TEMP_HIGH,
+                        "value": self._attr_target_temperature_high,
+                        "format": "target_temperature",
+                    },
+                },
+            ),
+        )
+
+    @callback
+    def _update_target_temperature_high(self, target_temperature_high: float):
+        self.hass.async_create_task(
+            self._async_set_attribute(
+                "temperature",
+                {
+                    "target_temperature_high": {
+                        "attr": ATTR_TARGET_TEMP_HIGH,
+                        "value": target_temperature_high,
+                        "format": "target_temperature",
+                    },
+                    "target_temperature_low": {
+                        "attr": ATTR_TARGET_TEMP_LOW,
+                        "value": self._attr_target_temperature_low,
+                        "format": "target_temperature",
+                    },
+                },
+            ),
+        )
+
+    @callback
+    def _update_target_humidity(self, target_humidity: int):
+        self.hass.async_create_task(
+            self._async_set_attribute(
+                "humidity",
+                {
+                    "target_humidity": {
+                        "attr": ATTR_HUMIDITY,
+                        "value": target_humidity,
+                        "format": "target_humidity",
+                    }
+                },
+            ),
+        )
+
+    @callback
+    def _update_current_temperature(self, current_temperature: float):
         if (
-            hvac_action in [member.value for member in HVACAction]
-            or hvac_action is None
-        ):
-            if self._attr_hvac_action != hvac_action:
-                self._attr_hvac_action = hvac_action
-        elif hvac_action not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            _LOGGER.error(
-                "Received invalid hvac action: %s. Expected: %s.",
-                hvac_action,
-                [member.value for member in HVACAction],
+            value := self._validate_value(
+                "current_temperature", current_temperature, "current_temperature"
             )
+        ) is not None:
+            self._attr_current_temperature = value
+
+    @callback
+    def _update_current_humidity(self, current_humidity: float):
+        if (
+            value := self._validate_value(
+                "current_humidity", current_humidity, "current_humidity"
+            )
+        ) is not None:
+            self._attr_current_humidity = value
+
+    @callback
+    def _update_hvac_action(self, hvac_action: str):
+        if (
+            value := self._validate_value(
+                "hvac_action", hvac_action, [member.value for member in HVACAction]
+            )
+        ) is not None:
+            self._attr_hvac_action = value
+
+    async def _async_set_attribute(self, action, attributes) -> None:
+        variables = {}
+        for attr in attributes.keys():
+            # Validate input values
+            if (
+                value := self._validate_value(
+                    attr, attributes[attr]["value"], attributes[attr]["format"]
+                )
+            ) is not None:
+                attributes[attr]["value"] = value
+            else:
+                _LOGGER.debug(
+                    "Entity '%s' attribute '%s' update called with invalid value: '%s'.",
+                    self._attr_name,
+                    attr,
+                    attributes[attr]["value"],
+                )
+                return False
+
+            if getattr(self, "_attr_" + attr) == attributes[attr]["value"]:
+                # Nothing to do.
+                _LOGGER.debug(
+                    "Entity '%s' attribute '%s' is already set to value: '%s'.",
+                    self._attr_name,
+                    attr,
+                    attributes[attr]["value"],
+                )
+            else:
+                # Update entity attribute.
+                _LOGGER.debug(
+                    "Entity '%s' updating attribute '%s' to value: '%s'.",
+                    self._attr_name,
+                    attr,
+                    attributes[attr]["value"],
+                )
+                setattr(self, "_attr_" + attr, attributes[attr]["value"])
+                # Update last_on modes if not off mode.
+                if (
+                    attr in self._off_mode.keys()
+                    and attributes[attr]["value"] != self._off_mode[attr]
+                ):
+                    self._last_on_mode[attr] = attributes[attr]["value"]
+                # Set script varaible
+                variables[attributes[attr]["attr"]] = attributes[attr]["value"]
+
+        self.async_write_ha_state()
+
+        if len(variables) and (script := getattr(self, "_script_" + action)):
+            # Create a context referring to the trigger context.
+            trigger_context_id = None if self._context is None else self._context.id
+            script_context = Context(parent_id=trigger_context_id)
+            # Execute set action script.
+            _LOGGER.debug(
+                "Entity '%s' executing script 'set_action_%s' variables: '%s'.",
+                self._attr_name,
+                action,
+                variables,
+            )
+            await script.async_run(
+                run_variables=variables,
+                context=script_context,
+            )
+            _LOGGER.debug(
+                "Entity '%s' execution of script 'set_action_%s' finished.",
+                self._attr_name,
+                action,
+            )
+        return True
 
     @property
-    def precision(self):
-        """Return the precision of the system."""
-        if self._config.get(CONF_PRECISION) is not None:
-            return self._config.get(CONF_PRECISION)
-        return super().precision
+    def state(self):
+        """Return the current state."""
+        return self._attr_hvac_mode
 
     @property
-    def temperature_unit(self):
-        """Return the unit of measurement."""
-        return self._unit_of_measurement
-
-    @property
-    def current_temperature(self):
-        """Return the current temperature."""
-        return self._current_temp
-
-    @property
-    def current_humidity(self):
-        """Return the current humidity."""
-        return self._current_humidity
-
-    @property
-    def target_temperature(self):
-        """Return the temperature we try to reach."""
-        return self._target_temp
-
-    @property
-    def target_humidity(self):
-        """Return the humidity we try to reach."""
-        return self._target_humidity
-
-    @property
-    def hvac_mode(self):
-        """Return current operation ie. heat, cool, idle."""
-        return self._current_operation
-
-    @property
-    def preset_mode(self):
-        """Return preset setting"""
-        return self._current_preset_mode
-
-    @property
-    def fan_mode(self):
-        """Return the fan setting."""
-        return self._current_fan_mode
-
-    @property
-    def swing_mode(self):
-        """Return the swing setting."""
-        return self._current_swing_mode
-
-    @property
-    def swing_modes(self):
-        """List of available swing modes."""
-        return self._swing_modes_list
-
-    @property
-    def last_on_operation(self):
-        """Return the last non-idle operation ie. heat, cool."""
-        return self._last_on_operation
-
-    async def _run_script(self, script, variables, context):
-        # Create a context referring to the trigger context.
-        trigger_context_id = None if context is None else context.id
-        script_context = Context(parent_id=trigger_context_id)
-        await script.async_run(run_variables=variables, context=script_context)
+    def extra_state_attributes(self):
+        """Platform specific attributes."""
+        return {
+            "last_on_mode": self._last_on_mode,
+            "off_mode": self._off_mode,
+        }
 
     async def async_turn_off(self) -> None:
         """Turn climate off."""
-        if HVACMode.OFF in self._attr_hvac_modes:
-            await self.async_set_hvac_mode(HVACMode.OFF)
+        if "hvac_mode" in self._off_mode.keys():
+            await self.async_set_hvac_mode(self._off_mode["hvac_mode"])
 
     async def async_turn_on(self) -> None:
         """Turn climate on."""
-        if self._last_on_operation in self._attr_hvac_modes:
-            await self.async_set_hvac_mode(self._last_on_operation)
+        if "hvac_mode" in self._last_on_mode.keys():
+            await self.async_set_hvac_mode(self._last_on_mode["hvac_mode"])
+
+    async def async_toggle(self) -> None:
+        """Toggle climate."""
+        if (
+            "hvac_mode" in self._off_mode.keys()
+            and "hvac_mode" in self._last_on_mode.keys()
+        ):
+            if self._attr_hvac_mode == self._off_mode["hvac_mode"]:
+                await self.async_set_hvac_mode(self._last_on_mode["hvac_mode"])
+            elif self._attr_hvac_mode == self._last_on_mode["hvac_mode"]:
+                await self.async_set_hvac_mode(self._off_mode["hvac_mode"])
 
     async def async_set_hvac_mode(self, hvac_mode: str) -> None:
-        """Set new operation mode."""
-        if self._hvac_mode_template is None:
-            self._current_operation = hvac_mode  # always optimistic
-            self.async_write_ha_state()
-
-        if self._set_hvac_mode_script is not None:
-            await self._run_script(
-                self._set_hvac_mode_script, {ATTR_HVAC_MODE: hvac_mode}, self._context
-            )
-
-        if not hvac_mode == HVACMode.OFF:
-            self._last_on_operation = hvac_mode
+        """Set new hvac mode."""
+        await self._async_set_attribute(
+            "hvac_mode",
+            {
+                "hvac_mode": {
+                    "attr": ATTR_HVAC_MODE,
+                    "value": hvac_mode,
+                    "format": self._attr_hvac_modes,
+                }
+            },
+        )
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
-        if self._preset_mode_template is None:
-            self._current_preset_mode = preset_mode
-            self.async_write_ha_state()
-
-        if self._set_preset_mode_script is not None:
-            await self._run_script(
-                self._set_preset_mode_script,
-                {ATTR_PRESET_MODE: preset_mode},
-                self._context,
-            )
+        await self._async_set_attribute(
+            "preset_mode",
+            {
+                "preset_mode": {
+                    "attr": ATTR_PRESET_MODE,
+                    "value": preset_mode,
+                    "format": self._attr_preset_modes,
+                }
+            },
+        )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new fan mode."""
-        if self._fan_mode_template is None:
-            self._current_fan_mode = fan_mode  # always optimistic
-            self.async_write_ha_state()
-
-        if self._set_fan_mode_script is not None:
-            await self._run_script(
-                self._set_fan_mode_script, {ATTR_FAN_MODE: fan_mode}, self._context
-            )
+        await self._async_set_attribute(
+            "fan_mode",
+            {
+                "fan_mode": {
+                    "attr": ATTR_FAN_MODE,
+                    "value": fan_mode,
+                    "format": self._attr_fan_modes,
+                }
+            },
+        )
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         """Set new swing mode."""
-        if self._swing_mode_template is None:  # use optimistic mode
-            self._current_swing_mode = swing_mode
-            self.async_write_ha_state()
+        await self._async_set_attribute(
+            "swing_mode",
+            {
+                "swing_mode": {
+                    "attr": ATTR_SWING_MODE,
+                    "value": swing_mode,
+                    "format": self._attr_swing_modes,
+                }
+            },
+        )
 
-        if self._set_swing_mode_script is not None:
-            await self._run_script(
-                self._set_swing_mode_script,
-                {ATTR_SWING_MODE: swing_mode},
-                self._context,
-            )
+    async def async_set_humidity(self, target_humidity: int) -> None:
+        """Set new humidity target."""
+        await self._async_set_attribute(
+            "humidity",
+            {
+                "target_humidity": {
+                    "attr": ATTR_HUMIDITY,
+                    "value": target_humidity,
+                    "format": "target_humidity",
+                }
+            },
+        )
 
     async def async_set_temperature(self, **kwargs) -> None:
-        """Set new target temperature."""
-        # handle optimistic mode
-        if kwargs.get(ATTR_HVAC_MODE, self._current_operation) == HVACMode.HEAT_COOL:
-            if self._target_temperature_high_template is None:
-                self._attr_target_temperature_high = kwargs.get(ATTR_TARGET_TEMP_HIGH)
-
-            if self._target_temperature_low_template is None:
-                self._attr_target_temperature_low = kwargs.get(ATTR_TARGET_TEMP_LOW)
-
-            if (
-                self._target_temperature_high_template
-                or self._target_temperature_low_template
-            ):
-                self.async_write_ha_state()
+        """Set new target temperatures."""
+        attributes = {}
+        hvac_mode = self._attr_hvac_mode
+        if (hvac_mode := kwargs.get(ATTR_HVAC_MODE)) is not None:
+            attributes["hvac_mode"] = {
+                "attr": ATTR_HVAC_MODE,
+                "value": hvac_mode,
+                "format": self._attr_hvac_modes,
+            }
         else:
-            if self._target_temperature_template is None:
-                self._target_temp = kwargs.get(ATTR_TEMPERATURE)
-                self.async_write_ha_state()
+            hvac_mode = self._attr_hvac_mode
 
-        # set temperature calls can contain a new hvac mode.
-        if operation_mode := kwargs.get(ATTR_HVAC_MODE):
-            await self.async_set_hvac_mode(operation_mode)
+        if hvac_mode == HVACMode.HEAT_COOL:
+            if (target_temperature_low := kwargs.get(ATTR_TARGET_TEMP_LOW)) is not None:
+                attributes["target_temperature_low"] = {
+                    "attr": ATTR_TARGET_TEMP_LOW,
+                    "value": target_temperature_low,
+                    "format": "target_temperature",
+                }
+            else:
+                return False
+            if (
+                target_temperature_high := kwargs.get(ATTR_TARGET_TEMP_HIGH)
+            ) is not None:
+                attributes["target_temperature_high"] = {
+                    "attr": ATTR_TARGET_TEMP_HIGH,
+                    "value": target_temperature_high,
+                    "format": "target_temperature",
+                }
+            else:
+                return False
+        else:
+            if (target_temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
+                attributes["target_temperature"] = {
+                    "attr": ATTR_TEMPERATURE,
+                    "value": target_temperature,
+                    "format": "target_temperature",
+                }
+            else:
+                return False
 
-        if self._set_temperature_script is not None:
-            await self._run_script(
-                self._set_temperature_script,
-                {
-                    ATTR_TEMPERATURE: kwargs.get(ATTR_TEMPERATURE),
-                    ATTR_TARGET_TEMP_HIGH: kwargs.get(ATTR_TARGET_TEMP_HIGH),
-                    ATTR_TARGET_TEMP_LOW: kwargs.get(ATTR_TARGET_TEMP_LOW),
-                    ATTR_HVAC_MODE: kwargs.get(ATTR_HVAC_MODE),
-                },
-                self._context,
-            )
-
-    async def async_set_humidity(self, humidity) -> None:
-        """Set new humidity target."""
-        if self._target_humidity_template is None:  # use optimistic mode
-            self._current_humidity = humidity
-            self.async_write_ha_state()
-
-        if self._set_humidity_script is not None:
-            await self._run_script(
-                self._set_humidity_script, {ATTR_HUMIDITY: humidity}, self._context
-            )
+        await self._async_set_attribute("temperature", attributes)
