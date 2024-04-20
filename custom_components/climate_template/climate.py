@@ -136,7 +136,9 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_SET_FAN_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_PRESET_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_SWING_MODE_ACTION): cv.SCRIPT_SCHEMA,
-        vol.Optional(CONF_HVAC_MODE_LIST, default=[]): cv.ensure_list,
+        vol.Optional(
+            CONF_HVAC_MODE_LIST, default=[HVACMode.OFF, HVACMode.HEAT]
+        ): cv.ensure_list,
         vol.Optional(CONF_PRESET_MODE_LIST, default=[]): cv.ensure_list,
         vol.Optional(CONF_FAN_MODE_LIST, default=[]): cv.ensure_list,
         vol.Optional(CONF_SWING_MODE_LIST, default=[]): cv.ensure_list,
