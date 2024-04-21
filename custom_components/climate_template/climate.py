@@ -646,7 +646,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 ) is not None:
                     self._attr_hvac_action = hvac_action
 
-            if (value := previous_state.attributes.get("last_on_mode")) is dict:
+            if (
+                value := previous_state.attributes.get("last_on_mode")
+            ) is not None and type(value) is dict:
                 for mode in value.keys():
                     self._last_on_mode[mode] = value[mode]
 
