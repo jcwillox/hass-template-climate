@@ -947,10 +947,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     @callback
     def _update_target_humidity(self, target_humidity: int):
         self.hass.async_create_task(self.async_set_humidity(target_humidity))
-                    }
-                },
-            ),
-        )
 
     @callback
     def _update_current_temperature(self, current_temperature: float):
