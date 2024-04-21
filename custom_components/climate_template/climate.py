@@ -994,7 +994,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 return False
 
-            if getattr(self, "_template_" + attr) and getattr(self, "_attr_" + attr) == attributes[attr]["value"]:
+            if (
+                getattr(self, "_template_" + attr)
+                and getattr(self, "_attr_" + attr) == attributes[attr]["value"]
+            ):
                 # Nothing to do.
                 _LOGGER.debug(
                     "Entity '%s' attribute '%s' is already set to value: '%s'.",
