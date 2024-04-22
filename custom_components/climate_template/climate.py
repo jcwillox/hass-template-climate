@@ -895,7 +895,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
 
         _LOGGER.debug(
-            "Entity '%s' attribute '%s' triggered update with value: '%s'.",
+            "Entity '%s' validated attribute '%s' with value: '%s'.",
             self._attr_name,
             attr,
             value,
@@ -904,54 +904,110 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_hvac_mode(self, hvac_mode: str):
-        self.hass.async_create_task(self.async_set_hvac_mode(hvac_mode))
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_HVAC_MODE_TEMPLATE,
+            hvac_mode,
+        )
+        self.hass.async_create_task(
+            self.async_set_hvac_mode(**{ATTR_HVAC_MODE: hvac_mode})
+        )
 
     @callback
     def _update_preset_mode(self, preset_mode: str):
-        self.hass.async_create_task(self.async_set_preset_mode(preset_mode))
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_PRESET_MODE_TEMPLATE,
+            preset_mode,
+        )
+        self.hass.async_create_task(
+            self.async_set_preset_mode(**{ATTR_PRESET_MODE: preset_mode})
+        )
 
     @callback
     def _update_fan_mode(self, fan_mode: str):
-        self.hass.async_create_task(self.async_set_fan_mode(fan_mode))
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_FAN_MODE_TEMPLATE,
+            fan_mode,
+        )
+        self.hass.async_create_task(
+            self.async_set_fan_mode(**{ATTR_FAN_MODE: fan_mode})
+        )
 
     @callback
     def _update_swing_mode(self, swing_mode: str):
-        self.hass.async_create_task(self.async_set_swing_mode(swing_mode))
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_SWING_MODE_TEMPLATE,
+            swing_mode,
+        )
+        self.hass.async_create_task(
+            self.async_set_swing_mode(**{ATTR_SWING_MODE: swing_mode})
+        )
 
     @callback
     def _update_target_temperature(self, target_temperature: float):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TARGET_TEMPERATURE_TEMPLATE,
+            target_temperature,
+        )
         self.hass.async_create_task(
             self.async_set_temperature(**{ATTR_TEMPERATURE: target_temperature})
         )
 
     @callback
     def _update_target_temperature_low(self, target_temperature_low: float):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
+            target_temperature_low,
+        )
         self.hass.async_create_task(
-            self.async_set_temperature(
-                **{
-                    ATTR_TARGET_TEMP_LOW: target_temperature_low,
-                    ATTR_TARGET_TEMP_HIGH: self._attr_target_temperature_high,
-                }
-            )
+            self.async_set_temperature(**{ATTR_TARGET_TEMP_LOW: target_temperature_low})
         )
 
     @callback
     def _update_target_temperature_high(self, target_temperature_high: float):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE,
+            target_temperature_high,
+        )
         self.hass.async_create_task(
             self.async_set_temperature(
-                **{
-                    ATTR_TARGET_TEMP_LOW: self._attr_target_temperature_low,
-                    ATTR_TARGET_TEMP_HIGH: target_temperature_high,
-                }
+                **{ATTR_TARGET_TEMP_HIGH: target_temperature_high}
             )
         )
 
     @callback
     def _update_target_humidity(self, target_humidity: int):
-        self.hass.async_create_task(self.async_set_humidity(target_humidity))
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TARGET_HUMIDITY_TEMPLATE,
+            target_humidity,
+        )
+        self.hass.async_create_task(
+            self.async_set_humidity(**{ATTR_HUMIDITY: target_humidity})
+        )
 
     @callback
     def _update_current_temperature(self, current_temperature: float):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_CURRENT_TEMPERATURE_TEMPLATE,
+            current_temperature,
+        )
         if (
             value := self._validate_value(
                 "current_temperature", current_temperature, "current_temperature"
@@ -961,6 +1017,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_current_humidity(self, current_humidity: float):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_CURRENT_HUMIDITY_TEMPLATE,
+            current_humidity,
+        )
         if (
             value := self._validate_value(
                 "current_humidity", current_humidity, "current_humidity"
@@ -970,6 +1032,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_hvac_action(self, hvac_action: str):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_HVAC_ACTION_TEMPLATE,
+            hvac_action,
+        )
         if (
             value := self._validate_value(
                 "hvac_action", hvac_action, [member.value for member in HVACAction]
@@ -1033,7 +1101,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             script_context = Context(parent_id=trigger_context_id)
             # Execute set action script.
             _LOGGER.debug(
-                "Entity '%s' executing script 'set_action_%s' with variables: '%s'.",
+                "Entity '%s' executing script 'set_%s' with variables: '%s'.",
                 self._attr_name,
                 action,
                 variables,
@@ -1043,7 +1111,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 context=script_context,
             )
             _LOGGER.debug(
-                "Entity '%s' execution of script 'set_action_%s' finished.",
+                "Entity '%s' execution of script 'set_%s' finished.",
                 self._attr_name,
                 action,
             )
@@ -1135,14 +1203,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             },
         )
 
-    async def async_set_humidity(self, target_humidity: int) -> None:
+    async def async_set_humidity(self, humidity: int) -> None:
         """Set new humidity target."""
         await self._async_set_attribute(
             "humidity",
             {
                 "target_humidity": {
                     "attr": ATTR_HUMIDITY,
-                    "value": target_humidity,
+                    "value": humidity,
                     "format": "target_humidity",
                 }
             },
@@ -1151,43 +1219,30 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperatures."""
         attributes = {}
-        hvac_mode = self._attr_hvac_mode
+        if (target_temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
+            attributes["target_temperature"] = {
+                "attr": ATTR_TEMPERATURE,
+                "value": target_temperature,
+                "format": "target_temperature",
+            }
+        if (target_temperature_low := kwargs.get(ATTR_TARGET_TEMP_LOW)) is not None:
+            attributes["target_temperature_low"] = {
+                "attr": ATTR_TARGET_TEMP_LOW,
+                "value": target_temperature_low,
+                "format": "target_temperature",
+            }
+        if (target_temperature_high := kwargs.get(ATTR_TARGET_TEMP_HIGH)) is not None:
+            attributes["target_temperature_high"] = {
+                "attr": ATTR_TARGET_TEMP_HIGH,
+                "value": target_temperature_high,
+                "format": "target_temperature",
+            }
         if (hvac_mode := kwargs.get(ATTR_HVAC_MODE)) is not None:
             attributes["hvac_mode"] = {
                 "attr": ATTR_HVAC_MODE,
                 "value": hvac_mode,
                 "format": self._attr_hvac_modes,
             }
-        else:
-            hvac_mode = self._attr_hvac_mode
+        if len(attributes):
+            await self._async_set_attribute("temperature", attributes)
 
-        if hvac_mode == HVACMode.HEAT_COOL:
-            if (target_temperature_low := kwargs.get(ATTR_TARGET_TEMP_LOW)) is not None:
-                attributes["target_temperature_low"] = {
-                    "attr": ATTR_TARGET_TEMP_LOW,
-                    "value": target_temperature_low,
-                    "format": "target_temperature",
-                }
-            else:
-                return False
-            if (
-                target_temperature_high := kwargs.get(ATTR_TARGET_TEMP_HIGH)
-            ) is not None:
-                attributes["target_temperature_high"] = {
-                    "attr": ATTR_TARGET_TEMP_HIGH,
-                    "value": target_temperature_high,
-                    "format": "target_temperature",
-                }
-            else:
-                return False
-        else:
-            if (target_temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
-                attributes["target_temperature"] = {
-                    "attr": ATTR_TEMPERATURE,
-                    "value": target_temperature,
-                    "format": "target_temperature",
-                }
-            else:
-                return False
-
-        await self._async_set_attribute("temperature", attributes)
