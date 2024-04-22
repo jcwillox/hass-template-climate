@@ -1245,4 +1245,3 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             }
         if len(attributes):
             await self._async_set_attribute("temperature", attributes)
-
