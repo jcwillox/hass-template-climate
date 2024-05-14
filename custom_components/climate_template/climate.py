@@ -4,6 +4,7 @@ import logging
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+from enum import IntFlag
 from homeassistant.core import Context, callback
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -77,6 +78,7 @@ CONF_PRECISION = "precision"
 CONF_TEMP_STEP = "temp_step"
 CONF_MODE_ACTION = "mode_action"
 CONF_MAX_ACTION = "max_action"
+CONF_PRESETS_FEATURES = "presets_features"
 
 CONF_CURRENT_TEMPERATURE_TEMPLATE = "current_temperature_template"
 CONF_CURRENT_HUMIDITY_TEMPLATE = "current_humidity_template"
@@ -89,6 +91,7 @@ CONF_FAN_MODE_TEMPLATE = "fan_mode_template"
 CONF_PRESET_MODE_TEMPLATE = "preset_mode_template"
 CONF_SWING_MODE_TEMPLATE = "swing_mode_template"
 CONF_HVAC_ACTION_TEMPLATE = "hvac_action_template"
+CONF_PRESETS_TEMPLATE = "presets_template"
 
 CONF_SET_TEMPERATURE_ACTION = "set_temperature"
 CONF_SET_HUMIDITY_ACTION = "set_humidity"
@@ -96,6 +99,7 @@ CONF_SET_HVAC_MODE_ACTION = "set_hvac_mode"
 CONF_SET_FAN_MODE_ACTION = "set_fan_mode"
 CONF_SET_PRESET_MODE_ACTION = "set_preset_mode"
 CONF_SET_SWING_MODE_ACTION = "set_swing_mode"
+CONF_SET_PRESETS_ACTION = "set_presets"
 
 DEFAULT_NAME = "Template Climate"
 DEFAULT_TEMPERATURE = 21
@@ -111,8 +115,22 @@ DEFAULT_SWING_MODE_LIST = []
 DEFAULT_TEMP_STEP = 1
 DEFAULT_MODE_ACTION = "single"
 DEFAULT_MAX_ACTION = 1
-
+DEFAULT_PRESETS_FEATURES = 0
 DOMAIN = "climate_template"
+
+
+class ClimateEntityPresetFeature(IntFlag):
+    """Supported presets features of the climate_template entity."""
+
+    EDITABLE = 1
+    PRESERVED = 2
+    HVAC_MODE = 4
+    FAN_MODE = 8
+    SWING_MODE = 16
+    TARGET_TEMPERATURE = 32
+    TARGET_TEMPERATURE_RANGE = 64
+    TARGET_HUMIDITY = 128
+
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     {
@@ -132,12 +150,14 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_PRESET_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
+        vol.Optional(CONF_PRESETS_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HUMIDITY_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HVAC_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_FAN_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_PRESET_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_SWING_MODE_ACTION): cv.SCRIPT_SCHEMA,
+        vol.Optional(CONF_SET_PRESETS_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(
             CONF_HVAC_MODE_LIST, default=DEFAULT_HVAC_MODE_LIST
         ): cv.ensure_list,
@@ -164,6 +184,9 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
             ["parallel", "queued", "restart", "single"]
         ),
         vol.Optional(CONF_MAX_ACTION, default=DEFAULT_MAX_ACTION): cv.positive_int,
+        vol.Optional(
+            CONF_PRESETS_FEATURES, default=DEFAULT_PRESETS_FEATURES
+        ): cv.positive_int,
     }
 )
 
@@ -250,6 +273,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE,
         )
         self._template_target_humidity = config.get(CONF_TARGET_HUMIDITY_TEMPLATE)
+        self._template_presets = config.get(CONF_PRESETS_TEMPLATE)
 
         self._action_hvac_mode = config.get(CONF_SET_HVAC_MODE_ACTION)
         self._action_preset_mode = config.get(CONF_SET_PRESET_MODE_ACTION)
@@ -257,10 +281,13 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._action_swing_mode = config.get(CONF_SET_SWING_MODE_ACTION)
         self._action_temperature = config.get(CONF_SET_TEMPERATURE_ACTION)
         self._action_humidity = config.get(CONF_SET_HUMIDITY_ACTION)
+        self._action_presets = config.get(CONF_SET_PRESETS_ACTION)
 
         # Init private attributes
+        self._presets = {}
         self._off_mode = {}
         self._last_on_mode = {}
+        self._presets_features = config.get(CONF_PRESETS_FEATURES)
 
         # Init scripts callbacks.
         self._script_hvac_mode = None
@@ -269,6 +296,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._script_swing_mode = None
         self._script_temperature = None
         self._script_humidity = None
+        self._script_presets = None
 
         # Check config entries and set entity supported features flags.
         if self._attr_hvac_modes and len(self._attr_hvac_modes) > 0:
@@ -288,6 +316,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     )[0]
                 else:
                     self._last_on_mode["hvac_mode"] = HVACMode.OFF
+            if (
+                len(self._attr_hvac_modes) < 2
+                and self._presets_features & ClimateEntityPresetFeature.HVAC_MODE
+            ):
+                _LOGGER.warning(
+                    "Entity '%s' has less than two hvac mode configured, but preset_features.hvac_mode is set.",
+                    self._attr_name,
+                )
+                self._presets_features ^= ClimateEntityPresetFeature.HVAC_MODE
         else:
             _LOGGER.error(
                 "Entity '%s' has no hvac mode, at least one hvac mode shall be configured!",
@@ -296,32 +333,43 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             return False
 
         if self._attr_preset_modes and len(self._attr_preset_modes) >= 2:
-            if self._action_preset_mode or self._template_preset_mode:
-                self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
-            else:
-                _LOGGER.warning(
+            self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
+            if not (self._action_preset_mode or self._template_preset_mode):
+                _LOGGER.info(
                     "Entity '%s' has preset modes configured, but there is neither action '%s' nor template '%s' configured.",
                     self._attr_name,
                     CONF_SET_PRESET_MODE_ACTION,
                     CONF_PRESET_MODE_TEMPLATE,
                 )
                 self._attr_preset_modes = []
-        elif self._action_preset_mode or self._template_preset_mode:
-            _LOGGER.warning(
-                "Entity '%s' has less than two preset mode configured, but there is action '%s' and/or template '%s' configured.",
-                self._attr_name,
-                CONF_SET_PRESET_MODE_ACTION,
-                CONF_PRESET_MODE_TEMPLATE,
-            )
-            self._action_preset_mode = None
-            self._template_preset_mode = None
+        else:
+            if self._action_preset_mode or self._template_preset_mode:
+                _LOGGER.warning(
+                    "Entity '%s' has less than two preset mode configured, but there is action '%s' and/or template '%s' configured.",
+                    self._attr_name,
+                    CONF_SET_PRESET_MODE_ACTION,
+                    CONF_PRESET_MODE_TEMPLATE,
+                )
+                self._action_preset_mode = None
+                self._template_preset_mode = None
+            if self._presets:
+                _LOGGER.warning(
+                    "Entity '%s' has less than two preset mode configured, but there are preset_features configured.",
+                    self._attr_name,
+                    CONF_SET_PRESET_MODE_ACTION,
+                    CONF_PRESET_MODE_TEMPLATE,
+                )
+                self._presets = 0
 
         if self._attr_fan_modes and len(self._attr_fan_modes) >= 2:
-            if self._action_fan_mode or self._template_fan_mode:
-                self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
-            else:
-                _LOGGER.warning(
-                    "Entity '%s' has fan modes configured, but there is neither action '%s' nor template '%s' configured.",
+            self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
+            if not (
+                self._action_fan_mode
+                or self._template_fan_mode
+                or self._presets_features & ClimateEntityPresetFeature.FAN_MODE
+            ):
+                _LOGGER.info(
+                    "Entity '%s' has fan modes configured, but there is neither action '%s', template '%s' nor preset_features.fan_mode configured.",
                     self._attr_name,
                     CONF_SET_FAN_MODE_ACTION,
                     CONF_FAN_MODE_TEMPLATE,
@@ -337,13 +385,22 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 self._action_fan_mode = None
                 self._template_fan_mode = None
+            if self._presets_features & ClimateEntityPresetFeature.FAN_MODE:
+                _LOGGER.warning(
+                    "Entity '%s' has less than two fan mode configured, but preset_features.fan_mode is set.",
+                    self._attr_name,
+                )
+                self._presets_features ^= ClimateEntityPresetFeature.FAN_MODE
 
         if self._attr_swing_modes and len(self._attr_swing_modes) >= 2:
-            if self._action_swing_mode or self._template_swing_mode:
-                self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
-            else:
-                _LOGGER.warning(
-                    "Entity '%s' has swing modes configured, but there is neither action '%s' nor template '%s' configured.",
+            self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
+            if not (
+                self._action_swing_mode
+                or self._template_swing_mode
+                or self._presets_features & ClimateEntityPresetFeature.SWING_MODE
+            ):
+                _LOGGER.info(
+                    "Entity '%s' has swing modes configured, but there is neither action '%s', template '%s' nor preset_features.swing_mode configured.",
                     self._attr_name,
                     CONF_SET_SWING_MODE_ACTION,
                     CONF_SWING_MODE_TEMPLATE,
@@ -359,6 +416,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 self._action_swing_mode = None
                 self._template_swing_mode = None
+            if self._presets_features & ClimateEntityPresetFeature.SWING_MODE:
+                _LOGGER.warning(
+                    "Entity '%s' has less than two swing mode configured, but preset_features.swing_mode is set.",
+                    self._attr_name,
+                )
+                self._presets_features ^= ClimateEntityPresetFeature.SWING_MODE
 
         if HVACMode.HEAT_COOL in self._attr_hvac_modes:
             if (
@@ -376,17 +439,24 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 self._template_target_temperature_low = None
                 self._template_target_temperature_high = None
-            if self._action_temperature or (
-                self._template_target_temperature_low
-                and self._template_target_temperature_high
-            ):
-                self._attr_supported_features |= (
-                    ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+            self._attr_supported_features |= (
+                ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+            )
+            if not (
+                self._action_temperature
+                or (
+                    self._template_target_temperature_low
+                    and self._template_target_temperature_high
                 )
-            else:
-                _LOGGER.warning(
-                    "Entity '%s' has hvac mode heat_cool configured, but there is no action neither template for high or low temperature configued.",
+                or self._presets_features
+                & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
+            ):
+                _LOGGER.info(
+                    "Entity '%s' has hvac mode heat_cool configured, but there is neither '%s' action, '%s' and '%s' template nor preset_features.target_temperature_range configued.",
                     self._attr_name,
+                    CONF_SET_TEMPERATURE_ACTION,
+                    CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
+                    CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE,
                 )
         else:
             if (
@@ -401,6 +471,17 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 self._template_target_temperature_low = None
                 self._template_target_temperature_high = None
+            if (
+                self._presets_features
+                & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
+            ):
+                _LOGGER.warning(
+                    "Entity '%s' has no hvac mode heat_cool configured, but preset_features.target_temperature_range is set.",
+                    self._attr_name,
+                )
+                self._presets_features ^= (
+                    ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
+                )
 
         if any(
             list(
@@ -410,12 +491,18 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
             )
         ):
-            if self._action_temperature or self._template_target_temperature:
-                self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
-            else:
-                _LOGGER.warning(
-                    "Entity '%s' has hvac mode auto, heat or cool configured, but there is no action neither template for temperature configued.",
+            self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
+            if not (
+                self._action_temperature
+                or self._template_target_temperature
+                or self._presets_features
+                & ClimateEntityPresetFeature.TARGET_TEMPERATURE
+            ):
+                _LOGGER.info(
+                    "Entity '%s' has hvac mode auto, heat or cool configured, but there is neither '%s' action, '%s' template nor preset_features.target_temperature configued.",
                     self._attr_name,
+                    CONF_SET_TEMPERATURE_ACTION,
+                    CONF_TARGET_TEMPERATURE_TEMPLATE,
                 )
         else:
             if self._action_temperature:
@@ -432,13 +519,22 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     CONF_TARGET_TEMPERATURE_TEMPLATE,
                 )
                 self._template_target_temperature = None
+            if self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE:
+                _LOGGER.warning(
+                    "Entity '%s' has no hvac mode auto, heat or cool configured, but preset_features.target_temperature is set.",
+                    self._attr_name,
+                )
+                self._presets_features ^= ClimateEntityPresetFeature.TARGET_TEMPERATURE
 
         if HVACMode.DRY in self._attr_hvac_modes:
-            if self._action_humidity or self._template_target_humidity:
-                self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
-            else:
-                _LOGGER.warning(
-                    "Entity '%s' has hvac mode dry configured, but there is no '%s' action neither '%s' template configured.",
+            self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
+            if not (
+                self._action_humidity
+                or self._template_target_humidity
+                or self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY
+            ):
+                _LOGGER.info(
+                    "Entity '%s' has hvac mode dry configured, but there is neither '%s' action, '%s' template nor preset_features.humidity configured.",
                     self._attr_name,
                     CONF_SET_HUMIDITY_ACTION,
                     CONF_TARGET_HUMIDITY_TEMPLATE,
@@ -458,6 +554,38 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     CONF_TARGET_HUMIDITY_TEMPLATE,
                 )
                 self._action_humidity = None
+            if self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY:
+                _LOGGER.warning(
+                    "Entity '%s' has no hvac mode dry configured, but preset_features.target_humidity is set.",
+                    self._attr_name,
+                )
+                self._presets_features ^= ClimateEntityPresetFeature.TARGET_HUMIDITY
+
+        if (
+            not self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE
+            and (
+                self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE
+                or self._presets_features
+                & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
+                or self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY
+            )
+        ):
+            _LOGGER.warning(
+                "Entity '%s' has presets features configured, but there is neither '%s' action nor preset_features.editable configured.",
+                self._attr_name,
+                CONF_PRESETS_TEMPLATE,
+            )
+
+        if (
+            self._presets_features
+            and not self._presets_features & ClimateEntityPresetFeature.EDITABLE
+            and not self._template_presets
+        ):
+            _LOGGER.warning(
+                "Entity '%s' has presets features configured, but there is neither '%s' action nor preset_features.editable configured.",
+                self._attr_name,
+                CONF_PRESETS_TEMPLATE,
+            )
 
         if self._action_hvac_mode:
             self._script_hvac_mode = Script(
@@ -513,6 +641,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._script_humidity = Script(
                 hass,
                 self._action_humidity,
+                self._attr_name,
+                DOMAIN,
+                script_mode=self._attr_mode_action,
+                max_runs=self._attr_max_action,
+            )
+
+        if self._action_presets:
+            self._script_presets = Script(
+                hass,
+                self._action_presets,
                 self._attr_name,
                 DOMAIN,
                 script_mode=self._attr_mode_action,
@@ -652,6 +790,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 for mode in value.keys():
                     self._last_on_mode[mode] = value[mode]
 
+            if self._presets_features:
+                if (
+                    self._presets_features & ClimateEntityPresetFeature.PRESERVED
+                    and (value := previous_state.attributes.get("presets")) is not None
+                    and type(value) is dict
+                ):
+                    self._presets = self._validate_presets(value)
+                else:
+                    self._presets = self._validate_presets(self._presets)
+
         _LOGGER.debug(
             "Entity '%s' registering templates callbacks.",
             self._attr_name,
@@ -754,6 +902,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._template_hvac_action,
                 None,
                 self._update_hvac_action,
+                none_on_template_error=True,
+            )
+
+        if self._template_presets:
+            self.add_template_attribute(
+                "_presets",
+                self._template_presets,
+                None,
+                self._update_presets,
                 none_on_template_error=True,
             )
 
@@ -902,6 +1059,160 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
         return value
 
+    def _validate_presets(self, presets):
+        value = {}
+        for mode in self._attr_preset_modes:
+            if (
+                mode in presets.keys()
+                and type(presets[mode]) is dict
+                and presets[mode].keys()
+            ):
+                if not mode in value.keys():
+                    value[mode] = {}
+                if self._presets_features & ClimateEntityPresetFeature.HVAC_MODE:
+                    if (
+                        "hvac_mode" in presets[mode].keys()
+                        and (
+                            hvac_mode := self._validate_value(
+                                "hvac_mode",
+                                presets[mode]["hvac_mode"],
+                                self._attr_hvac_modes,
+                            )
+                        )
+                        is not None
+                    ):
+                        value[mode]["hvac_mode"] = hvac_mode
+                    else:
+                        value[mode]["hvac_mode"] = None
+
+                if self._presets_features & ClimateEntityPresetFeature.FAN_MODE:
+                    if (
+                        "fan_mode" in presets[mode].keys()
+                        and (
+                            fan_mode := self._validate_value(
+                                "fan_mode",
+                                presets[mode]["fan_mode"],
+                                self._attr_fan_modes,
+                            )
+                        )
+                        is not None
+                    ):
+                        value[mode]["fan_mode"] = fan_mode
+                    else:
+                        value[mode]["fan_mode"] = None
+
+                if self._presets_features & ClimateEntityPresetFeature.SWING_MODE:
+                    if (
+                        "swing_mode" in presets[mode].keys()
+                        and (
+                            swing_mode := self._validate_value(
+                                "swing_mode",
+                                presets[mode]["swing_mode"],
+                                self._attr_swing_modes,
+                            )
+                        )
+                        is not None
+                    ):
+                        value[mode]["swing_mode"] = swing_mode
+                    else:
+                        value[mode]["swing_mode"] = None
+
+                if (
+                    self._presets_features
+                    & ClimateEntityPresetFeature.TARGET_TEMPERATURE
+                ):
+                    if (
+                        "target_temperature" in presets[mode].keys()
+                        and (
+                            target_temperature := self._validate_value(
+                                "target_temperature",
+                                presets[mode]["target_temperature"],
+                                "target_temperature",
+                            )
+                        )
+                        is not None
+                    ):
+                        value[mode]["target_temperature"] = target_temperature
+                    else:
+                        value[mode]["target_temperature"] = None
+
+                if (
+                    self._presets_features
+                    & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
+                ):
+                    if (
+                        "target_temperature_low" in presets[mode].keys()
+                        and (
+                            target_temperature_low := self._validate_value(
+                                "target_temperature_low",
+                                presets[mode]["target_temperature_low"],
+                                "target_temperature",
+                            )
+                        )
+                        is not None
+                    ):
+                        value[mode]["target_temperature_low"] = target_temperature_low
+                    else:
+                        value[mode]["target_temperature_low"] = None
+                    if (
+                        "target_temperature_high" in presets[mode].keys()
+                        and (
+                            target_temperature_high := self._validate_value(
+                                "target_temperature_high",
+                                presets[mode]["target_temperature_high"],
+                                "target_temperature",
+                            )
+                        )
+                        is not None
+                    ):
+                        value[mode]["target_temperature_high"] = target_temperature_high
+                    else:
+                        value[mode]["target_temperature_high"] = None
+
+                if self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY:
+                    if (
+                        "target_humidity" in presets[mode].keys()
+                        and (
+                            target_humidity := self._validate_value(
+                                "target_humidity",
+                                presets[mode]["target_humidity"],
+                                "target_humidity",
+                            )
+                        )
+                        is not None
+                    ):
+                        value[mode]["target_humidity"] = target_humidity
+                    else:
+                        value[mode]["target_humidity"] = None
+            else:
+                _LOGGER.debug(
+                    "Entity '%s' presets for preset mode '%s' is not defined, initializing.",
+                    self._attr_name,
+                    mode,
+                )
+                value[mode] = {}
+                if self._presets_features & ClimateEntityPresetFeature.HVAC_MODE:
+                    value[mode]["hvac_mode"] = None
+                if self._presets_features & ClimateEntityPresetFeature.FAN_MODE:
+                    value[mode]["fan_mode"] = None
+                if self._presets_features & ClimateEntityPresetFeature.SWING_MODE:
+                    value[mode]["swing_mode"] = None
+                if (
+                    self._presets_features
+                    & ClimateEntityPresetFeature.TARGET_TEMPERATURE
+                ):
+                    value[mode]["target_temperature"] = None
+                if (
+                    self._presets_features
+                    & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
+                ):
+                    value[mode]["target_temperature_low"] = None
+                    value[mode]["target_temperature_high"] = None
+                if self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY:
+                    value[mode]["target_humidity"] = None
+
+        return value
+
     @callback
     def _update_hvac_mode(self, hvac_mode: str):
         _LOGGER.debug(
@@ -925,6 +1236,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self.hass.async_create_task(
             self.async_set_preset_mode(**{ATTR_PRESET_MODE: preset_mode})
         )
+        # Activate preset mode
+        if self._attr_preset_mode in self._presets.keys():
+            self.hass.async_create_task(
+                self.async_set_presets(self._presets[self._attr_preset_mode])
+            )
 
     @callback
     def _update_fan_mode(self, fan_mode: str):
@@ -1001,6 +1317,21 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
 
     @callback
+    def _update_presets(self, presets: dict):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_PRESETS_TEMPLATE,
+            presets,
+        )
+        value = self._validate_presets(presets)
+        if self._attr_preset_mode in value.keys():
+            self.hass.async_create_task(
+                self.async_set_presets(value[self._attr_preset_mode])
+            )
+        self._presets = value
+
+    @callback
     def _update_current_temperature(self, current_temperature: float):
         _LOGGER.debug(
             "Entity '%s' template '%s' triggered with attribute value: '%s'.",
@@ -1046,6 +1377,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._attr_hvac_action = value
 
     async def _async_set_attribute(self, action, attributes) -> None:
+        presets = {}
         variables = {}
         for attr in attributes.keys():
             # Validate input values
@@ -1064,10 +1396,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 return False
 
-            if (
-                getattr(self, "_template_" + attr)
-                and getattr(self, "_attr_" + attr) == attributes[attr]["value"]
-            ):
+            if getattr(self, "_attr_" + attr) == attributes[attr]["value"]:
                 # Nothing to do.
                 _LOGGER.debug(
                     "Entity '%s' attribute '%s' is already set to value: '%s'.",
@@ -1092,6 +1421,21 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     self._last_on_mode[attr] = attributes[attr]["value"]
                 # Set script varaible
                 variables[attributes[attr]["attr"]] = attributes[attr]["value"]
+                # Update presets if defined.
+                if (
+                    len(self._presets)
+                    and self._presets_features & ClimateEntityPresetFeature.EDITABLE
+                    and self._attr_preset_mode in self._presets.keys()
+                    and attr in self._presets[self._attr_preset_mode].keys()
+                    and self._presets[self._attr_preset_mode][attr]
+                    != attributes[attr]["value"]
+                ):
+                    if not self._attr_preset_mode in presets.keys():
+                        presets[self._attr_preset_mode] = {}
+                    presets[self._attr_preset_mode][attr] = attributes[attr]["value"]
+                    self._presets[self._attr_preset_mode][attr] = attributes[attr][
+                        "value"
+                    ]
 
         self.async_write_ha_state()
 
@@ -1115,6 +1459,27 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_name,
                 action,
             )
+
+        if len(presets) and self._script_presets:
+            variables = {"presets": self._presets, "changed": presets}
+            # Create a context referring to the trigger context.
+            trigger_context_id = None if self._context is None else self._context.id
+            script_context = Context(parent_id=trigger_context_id)
+            # Execute set action script.
+            _LOGGER.debug(
+                "Entity '%s' executing script 'set_presets' with variables: '%s'.",
+                self._attr_name,
+                variables,
+            )
+            await self._script_presets.async_run(
+                run_variables=variables,
+                context=script_context,
+            )
+            _LOGGER.debug(
+                "Entity '%s' execution of script 'set_presets' finished.",
+                self._attr_name,
+            )
+
         return True
 
     @property
@@ -1126,6 +1491,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def extra_state_attributes(self):
         """Platform specific attributes."""
         return {
+            "presets": self._presets,
             "last_on_mode": self._last_on_mode,
             "off_mode": self._off_mode,
         }
@@ -1245,3 +1611,31 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             }
         if len(attributes):
             await self._async_set_attribute("temperature", attributes)
+
+    async def async_set_presets(self, preset) -> None:
+        attributes = {}
+        if any(
+            attr in preset.keys()
+            for attr in [
+                "target_temperature",
+                "target_temperature_low",
+                "target_temperature_high",
+            ]
+        ):
+            if "target_temperature" in preset.keys():
+                attributes[ATTR_TEMPERATURE] = preset["target_temperature"]
+            if "target_temperature_low" in preset.keys():
+                attributes[ATTR_TARGET_TEMP_LOW] = preset["target_temperature_low"]
+            if "target_temperature_high" in preset.keys():
+                attributes[ATTR_TARGET_TEMP_HIGH] = preset["target_temperature_high"]
+            if "hvac_mode" in preset.keys():
+                attributes[ATTR_HVAC_MODE] = preset["hvac_mode"]
+            await self.async_set_temperature(**attributes)
+        elif "hvac_mode" in preset.keys():
+            await self.async_set_hvac_mode(**{ATTR_HVAC_MODE: preset["hvac_mode"]})
+        if "fan_mode" in preset.keys():
+            await self.async_set_fan_mode(**{ATTR_FAN_MODE: preset["fan_mode"]})
+        if "swing_mode" in preset.keys():
+            await self.async_set_swing_mode(**{ATTR_SWING_MODE: preset["swing_mode"]})
+        if "target_humidity" in preset.keys():
+            await self.async_set_humidity(**{ATTR_HUMIDITY: preset["target_humidity"]})
