@@ -5,7 +5,7 @@ import logging
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from enum import IntFlag
-from homeassistant.core import Context, callback
+from homeassistant.core import HomeAssistant, Context, callback
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
@@ -61,7 +61,7 @@ from homeassistant.const import (
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
+from homeassistant.helpers.typing import ConfigType
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -192,7 +192,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
 
 
 async def async_setup_platform(
-    hass: HomeAssistantType, config: ConfigType, async_add_entities, discovery_info=None
+    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
 ):
     """Set up the Template Climate."""
     async_add_entities([TemplateClimate(hass, config)])
@@ -203,7 +203,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     _attr_should_poll = False
 
-    def __init__(self, hass: HomeAssistantType, config: ConfigType):
+    def __init__(self, hass: HomeAssistant, config: ConfigType):
         """Initialize the climate device."""
         super().__init__(
             hass,
