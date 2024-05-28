@@ -43,6 +43,8 @@ If you do not define a `template` or its corresponding `action` the climate devi
 |                                  |                                                                           |                                                                                                                                                                                                                                                                                                 |                                                    |
 | min_temp                         | `float`                                                                   | Minimum set point available.                                                                                                                                                                                                                                                                    | 7                                                  |
 | max_temp                         | `float`                                                                   | Maximum set point available.                                                                                                                                                                                                                                                                    | 35                                                 |
+| min_humidity                         | `float`                                                                   | Minimum set point available.                                                                                                                                                                                                                                                                    | 30  
+| max_humidity                         | `float`                                                                   | Maximum set point available.                                                                                                                                                                                                                                                                    | 99
 | precision                        | `float`                                                                   | The desired precision for this device.                                                                                                                                                                                                                                                          | 0.1 for Celsius and 1.0 for Fahrenheit.            |
 | temp_step                        | `float`                                                                   | Step size for temperature set point.                                                                                                                                                                                                                                                            | 1                                                  |
 
@@ -60,6 +62,8 @@ climate:
       - "fan_only"
     min_temp: 16
     max_temp: 30
+    min_humidity: 0
+    max_humidity: 100
 
     # get current temp.
     current_temperature_template: "{{ states('sensor.bedroom_temperature') }}"
