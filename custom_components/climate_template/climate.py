@@ -41,10 +41,11 @@ from homeassistant.const import (
     CONF_ENTITY_PICTURE_TEMPLATE,
     CONF_UNIQUE_ID,
 )
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
+from homeassistant.helpers.typing import ConfigType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
 
 
 async def async_setup_platform(
-    hass: HomeAssistantType, config: ConfigType, async_add_entities, discovery_info=None
+    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
 ):
     """Set up the Template Climate."""
     async_add_entities([TemplateClimate(hass, config)])
@@ -136,7 +137,7 @@ async def async_setup_platform(
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     """A template climate component."""
 
-    def __init__(self, hass: HomeAssistantType, config: ConfigType):
+    def __init__(self, hass: HomeAssistant, config: ConfigType):
         """Initialize the climate device."""
         super().__init__(
             hass,
