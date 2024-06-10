@@ -16,6 +16,7 @@ from homeassistant.components.climate.const import (
     DEFAULT_MAX_HUMIDITY, 
     ATTR_HVAC_MODE,
     ATTR_FAN_MODE,
+    ATTR_PRESET_MODE,
     ATTR_SWING_MODE,
     ATTR_CURRENT_TEMPERATURE,
     ATTR_CURRENT_HUMIDITY,
@@ -24,6 +25,13 @@ from homeassistant.components.climate.const import (
     FAN_LOW,
     FAN_MEDIUM,
     FAN_HIGH,
+    PRESET_ACTIVITY,
+    PRESET_AWAY,
+    PRESET_BOOST,
+    PRESET_COMFORT,
+    PRESET_ECO,
+    PRESET_HOME,
+    PRESET_SLEEP,
     ATTR_TARGET_TEMP_HIGH,
     ATTR_TARGET_TEMP_LOW,
     HVACMode,
@@ -53,6 +61,7 @@ from homeassistant.helpers.typing import ConfigType
 _LOGGER = logging.getLogger(__name__)
 
 CONF_FAN_MODE_LIST = "fan_modes"
+CONF_PRESET_MODE_LIST = "preset_modes"
 CONF_MODE_LIST = "modes"
 CONF_SWING_MODE_LIST = "swing_modes"
 CONF_TEMP_MIN = "min_temp"
@@ -70,6 +79,7 @@ CONF_TARGET_TEMPERATURE_HIGH_TEMPLATE = "target_temperature_high_template"
 CONF_TARGET_TEMPERATURE_LOW_TEMPLATE = "target_temperature_low_template"
 CONF_HVAC_MODE_TEMPLATE = "hvac_mode_template"
 CONF_FAN_MODE_TEMPLATE = "fan_mode_template"
+CONF_PRESET_MODE_TEMPLATE = "preset_mode_template"
 CONF_SWING_MODE_TEMPLATE = "swing_mode_template"
 CONF_HVAC_ACTION_TEMPLATE = "hvac_action_template"
 
@@ -77,6 +87,7 @@ CONF_SET_TEMPERATURE_ACTION = "set_temperature"
 CONF_SET_HUMIDITY_ACTION = "set_humidity"
 CONF_SET_HVAC_MODE_ACTION = "set_hvac_mode"
 CONF_SET_FAN_MODE_ACTION = "set_fan_mode"
+CONF_SET_PRESET_MODE_ACTION = "set_preset_mode"
 CONF_SET_SWING_MODE_ACTION = "set_swing_mode"
 
 CONF_CLIMATES = "climates"
@@ -100,12 +111,14 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_TARGET_TEMPERATURE_LOW_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_FAN_MODE_TEMPLATE): cv.template,
+        vol.Optional(CONF_PRESET_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HUMIDITY_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HVAC_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_FAN_MODE_ACTION): cv.SCRIPT_SCHEMA,
+        vol.Optional(CONF_SET_PRESET_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_SWING_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(
             CONF_MODE_LIST,
@@ -121,6 +134,10 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(
             CONF_FAN_MODE_LIST,
             default=[FAN_AUTO, FAN_LOW, FAN_MEDIUM, FAN_HIGH],
+        ): cv.ensure_list,
+        vol.Optional(
+            CONF_PRESET_MODE_LIST,
+            default=[PRESET_ECO, PRESET_AWAY, PRESET_BOOST, PRESET_COMFORT, PRESET_HOME, PRESET_SLEEP, PRESET_ACTIVITY],
         ): cv.ensure_list,
         vol.Optional(
             CONF_SWING_MODE_LIST, default=[STATE_ON, HVACMode.OFF]
@@ -169,6 +186,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._current_humidity = None
 
         self._current_fan_mode = FAN_LOW  # default optimistic state
+        self._current_preset_mode = PRESET_COMFORT # default optimistic state
         self._current_operation = HVACMode.OFF  # default optimistic state
         self._current_swing_mode = HVACMode.OFF  # default optimistic state
         self._target_temp = DEFAULT_TEMP  # default optimistic state
@@ -188,6 +206,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
         self._hvac_mode_template = config.get(CONF_HVAC_MODE_TEMPLATE)
         self._fan_mode_template = config.get(CONF_FAN_MODE_TEMPLATE)
+        self._preset_mode_template = config.get(CONF_PRESET_MODE_TEMPLATE)
         self._swing_mode_template = config.get(CONF_SWING_MODE_TEMPLATE)
         self._hvac_action_template = config.get(CONF_HVAC_ACTION_TEMPLATE)
 
@@ -197,6 +216,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         self._attr_hvac_modes = config[CONF_MODE_LIST]
         self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
+        self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
         self._swing_modes_list = config[CONF_SWING_MODE_LIST]
 
         self.entity_id = async_generate_entity_id(
@@ -226,6 +246,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 hass, set_fan_mode_action, self._attr_name, DOMAIN
             )
             self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
+
+        self._set_preset_mode_script = None
+        set_preset_mode_action = config.get(CONF_SET_PRESET_MODE_ACTION)
+        if set_preset_mode_action:
+            self._set_preset_mode_script = Script(
+                hass, set_preset_mode_action, self._attr_name, DOMAIN
+            )
+            self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
 
         self._set_temperature_script = None
         set_temperature_action = config.get(CONF_SET_TEMPERATURE_ACTION)
@@ -280,6 +308,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
             self._current_fan_mode = previous_state.attributes.get(
                 ATTR_FAN_MODE, FAN_LOW
+            )
+            self._current_preset_mode = previous_state.attributes.get(
+                ATTR_PRESET_MODE, PRESET_COMFORT
             )
             self._current_swing_mode = previous_state.attributes.get(
                 ATTR_SWING_MODE, HVACMode.OFF
@@ -354,6 +385,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._hvac_mode_template,
                 None,
                 self._update_hvac_mode,
+                none_on_template_error=True,
+            )
+        if self._preset_mode_template:
+            self.add_template_attribute(
+                "_current_preset_mode",
+                self._preset_mode_template,
+                None,
+                self._update_preset_mode,
                 none_on_template_error=True,
             )
 
@@ -453,6 +492,17 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_hvac_modes,
             )
 
+    def _update_preset_mode(self, preset_mode):
+        if preset_mode in self._attr_preset_modes:
+            self._current_preset_mode = preset_mode
+            self.hass.async_create_task(self.async_set_preset_mode(preset_mode))
+        elif preset_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            _LOGGER.error(
+                "Received invalid preset mode %s. Expected %s.",
+                preset_mode,
+                self._attr_preset_modes,
+            )
+
     def _update_fan_mode(self, fan_mode):
         if fan_mode in self._attr_fan_modes:
             self._current_fan_mode = fan_mode
@@ -529,6 +579,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         return self._current_operation
 
     @property
+    def preset_mode(self):
+        """Return preset setting"""
+        return self._current_preset_mode
+
+    @property
     def fan_mode(self):
         """Return the fan setting."""
         return self._current_fan_mode
@@ -552,6 +607,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         if self._set_hvac_mode_script is not None:
             await self._set_hvac_mode_script.async_run(
                 run_variables={ATTR_HVAC_MODE: hvac_mode}, context=self._context
+            )
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set new preset mode."""
+        if self._preset_mode_template is None:
+            self._current_preset_mode = preset_mode
+            self.async_write_ha_state()
+
+        if self._set_preset_mode_script is not None:
+            await self._set_preset_mode_script.async_run(
+                run_variables={ATTR_PRESET_MODE: preset_mode}, context=self._context
             )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
