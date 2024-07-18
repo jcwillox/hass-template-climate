@@ -493,7 +493,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._target_humidity = float(humidity)
-                self.hass.async_create_task(self.async_set_humidity(self._target_humidity))
+                self.hass.async_create_task(
+                    self.async_set_humidity(self._target_humidity)
+                )
             except ValueError:
                 _LOGGER.error("Could not parse target humidity from %s", humidity)
 
@@ -620,17 +622,27 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     @property
     def target_temperature(self):
         """Return the temperature we try to reach."""
-        return self._target_temp if self._current_operation != HVACMode.HEAT_COOL else None
+        return (
+            self._target_temp if self._current_operation != HVACMode.HEAT_COOL else None
+        )
 
     @property
     def target_temperature_high(self):
         """Return the temperature high we try to reach."""
-        return self._attr_target_temperature_high if self._current_operation == HVACMode.HEAT_COOL else None
+        return (
+            self._attr_target_temperature_high
+            if self._current_operation == HVACMode.HEAT_COOL
+            else None
+        )
 
     @property
     def target_temperature_low(self):
         """Return the temperature low we try to reach."""
-        return self._attr_target_temperature_low if self._current_operation == HVACMode.HEAT_COOL else None
+        return (
+            self._attr_target_temperature_low
+            if self._current_operation == HVACMode.HEAT_COOL
+            else None
+        )
 
     @property
     def hvac_mode(self):
