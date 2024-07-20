@@ -1,0 +1,17 @@
+[project]
+name = "hass-template-climate"
+version = "0.0.0"
+description = ""
+authors = [
+    {name = "Josh Willox", email = "joshwillox@gmail.com"},
+]
+dependencies = [
+    "homeassistant>=2024.5.5",
+]
+requires-python = "==3.12.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false

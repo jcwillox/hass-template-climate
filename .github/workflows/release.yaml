@@ -1,8 +1,25 @@
-name: "Publish"
+name: "Release"
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - "beta"
+      - "alpha"
+  workflow_dispatch:
+    inputs:
+      draft:
+        type: boolean
+        description: "Draft release"
+        default: false
+      release_type:
+        type: choice
+        description: "Release type"
+        default: "auto"
+        options:
+          - "auto"
+          - "patch"
+          - "minor"
+          - "major"
 
 defaults:
   run:
@@ -12,21 +29,26 @@ jobs:
   publish:
     name: "Publish"
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
       - name: "Checkout the repository"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: "Update version"
-        run: |
-          current="$(jq --raw-output .version manifest.json | sed 's/\./\\./g')"
-          sed -i s/$current/${{ github.event.release.tag_name }}/ manifest.json
+      - name: "Setup node"
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
 
-      - name: "Zip component"
-        run: |
-          zip climate_template.zip -r ./
-
-      - name: "Upload assets"
+      - name: "Release Package 📦"
+        run: corepack enable && pnpm dlx @jcwillox/semantic-release-config
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload ${{ github.event.release.tag_name }} climate_template.zip
+          SEMANTIC_RELEASE_GITHUB_DRAFT: ${{ inputs.draft }}
+          SEMANTIC_RELEASE_FORCE_RELEASE: ${{ inputs.release_type }}
+          SEMANTIC_RELEASE_CMD_PREPARE: |
+            yq -i '.version = "${nextRelease.version}"' manifest.json
+            zip climate_template.zip -r ./
+          SEMANTIC_RELEASE_GITHUB_ASSETS: "climate_template.zip"
