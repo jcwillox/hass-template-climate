@@ -143,7 +143,15 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         ): cv.ensure_list,
         vol.Optional(
             CONF_PRESET_MODE_LIST,
-            default=[PRESET_ECO, PRESET_AWAY, PRESET_BOOST, PRESET_COMFORT, PRESET_HOME, PRESET_SLEEP, PRESET_ACTIVITY],
+            default=[
+                PRESET_ECO,
+                PRESET_AWAY,
+                PRESET_BOOST,
+                PRESET_COMFORT,
+                PRESET_HOME,
+                PRESET_SLEEP,
+                PRESET_ACTIVITY,
+            ],
         ): cv.ensure_list,
         vol.Optional(
             CONF_SWING_MODE_LIST, default=[STATE_ON, HVACMode.OFF]
@@ -195,7 +203,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._target_humidity = None
 
         self._current_fan_mode = FAN_LOW  # default optimistic state
-        self._current_preset_mode = PRESET_COMFORT # default optimistic state
+        self._current_preset_mode = PRESET_COMFORT  # default optimistic state
         self._current_operation = HVACMode.OFF  # default optimistic state
         self._current_swing_mode = HVACMode.OFF  # default optimistic state
         self._target_temp = DEFAULT_TEMP  # default optimistic state
@@ -729,6 +737,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             await self._set_hvac_mode_script.async_run(
                 run_variables={ATTR_HVAC_MODE: hvac_mode}, context=self._context
             )
+
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
         if self._preset_mode_template is None:
