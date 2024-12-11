@@ -232,6 +232,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._unit_of_measurement = hass.config.units.temperature_unit
         self._attr_supported_features = 0
 
+        if HVACMode.OFF in self._attr_hvac_modes and len(self._attr_hvac_modes) > 1:
+            self._attr_supported_features |= ClimateEntityFeature.ON_OFF
+
         self._attr_hvac_modes = config[CONF_MODE_LIST]
         self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
         self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
