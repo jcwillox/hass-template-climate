@@ -751,72 +751,78 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: str) -> None:
         """Set new operation mode."""
-        if self._hvac_mode_template is None:
-            self._current_operation = hvac_mode  # always optimistic
+        if hvac_mode != self._current_operation:  # Only proceed if there's a change
+            self._current_operation = hvac_mode
+            if self._set_hvac_mode_script is not None:
+                await self._set_hvac_mode_script.async_run(
+                    run_variables={ATTR_HVAC_MODE: hvac_mode}, context=self._context
+                )
             self.async_write_ha_state()
-
-        if self._set_hvac_mode_script is not None:
-            await self._set_hvac_mode_script.async_run(
-                run_variables={ATTR_HVAC_MODE: hvac_mode}, context=self._context
-            )
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
-        if self._preset_mode_template is None:
+        if preset_mode != self._current_preset_mode:  # Only proceed if there's a change
             self._current_preset_mode = preset_mode
+            if self._set_preset_mode_script is not None:
+                await self._set_preset_mode_script.async_run(
+                    run_variables={ATTR_PRESET_MODE: preset_mode}, context=self._context
+                )
             self.async_write_ha_state()
-
-        if self._set_preset_mode_script is not None:
-            await self._set_preset_mode_script.async_run(
-                run_variables={ATTR_PRESET_MODE: preset_mode}, context=self._context
-            )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new fan mode."""
-        if self._fan_mode_template is None:
-            self._current_fan_mode = fan_mode  # always optimistic
+        if fan_mode != self._current_fan_mode:  # Only proceed if there's a change
+            self._current_fan_mode = fan_mode
+            if self._set_fan_mode_script is not None:
+                await self._set_fan_mode_script.async_run(
+                    run_variables={ATTR_FAN_MODE: fan_mode}, context=self._context
+                )
             self.async_write_ha_state()
-
-        if self._set_fan_mode_script is not None:
-            await self._set_fan_mode_script.async_run(
-                run_variables={ATTR_FAN_MODE: fan_mode}, context=self._context
-            )
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         """Set new swing mode."""
-        if self._swing_mode_template is None:  # use optimistic mode
+        if swing_mode != self._current_swing_mode:  # Only proceed if there's a change
             self._current_swing_mode = swing_mode
+            if self._set_swing_mode_script is not None:
+                await self._set_swing_mode_script.async_run(
+                    run_variables={ATTR_SWING_MODE: swing_mode}, context=self._context
+                )
             self.async_write_ha_state()
-
-        if self._set_swing_mode_script is not None:
-            await self._set_swing_mode_script.async_run(
-                run_variables={ATTR_SWING_MODE: swing_mode}, context=self._context
-            )
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
-        # handle optimistic mode
+        updated = False
+
         if kwargs.get(ATTR_HVAC_MODE, self._current_operation) == HVACMode.HEAT_COOL:
-            if self._target_temperature_high_template is None:
-                self._attr_target_temperature_high = kwargs.get(ATTR_TARGET_TEMP_HIGH)
+            # Update high and low target temperatures if needed
+            high_temp = kwargs.get(ATTR_TARGET_TEMP_HIGH)
+            low_temp = kwargs.get(ATTR_TARGET_TEMP_LOW)
+            
+            if self._target_temperature_high_template is None and high_temp != self._attr_target_temperature_high:
+                self._attr_target_temperature_high = high_temp
+                updated = True
 
-            if self._target_temperature_low_template is None:
-                self._attr_target_temperature_low = kwargs.get(ATTR_TARGET_TEMP_LOW)
+            if self._target_temperature_low_template is None and low_temp != self._attr_target_temperature_low:
+                self._attr_target_temperature_low = low_temp
+                updated = True
 
-            if (
-                self._target_temperature_high_template
-                or self._target_temperature_low_template
-            ):
-                self.async_write_ha_state()
         else:
-            if self._target_temperature_template is None:
-                self._target_temp = kwargs.get(ATTR_TEMPERATURE)
-                self.async_write_ha_state()
+            # Update single target temperature if needed
+            temp = kwargs.get(ATTR_TEMPERATURE)
+            if self._target_temperature_template is None and temp != self._target_temp:
+                self._target_temp = temp
+                updated = True
 
-        # set temperature calls can contain a new hvac mode.
+        # Update Home Assistant state if any changes occurred
+        if updated:
+            self.async_write_ha_state()
+
+        # Handle potential HVAC mode change
         if operation_mode := kwargs.get(ATTR_HVAC_MODE):
-            await self.async_set_hvac_mode(operation_mode)
+            if operation_mode != self._current_operation:
+                await self.async_set_hvac_mode(operation_mode)
 
+        # Run the set temperature script if defined
         if self._set_temperature_script is not None:
             await self._set_temperature_script.async_run(
                 run_variables={
@@ -830,11 +836,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_humidity(self, humidity):
         """Set new target humidity."""
-        if self._target_humidity_template is None:
-            self._target_humidity = humidity  # always optimistic
+        if humidity != self._target_humidity:  # Only proceed if there's a change
+            self._target_humidity = humidity
+            if self._set_humidity_script is not None:
+                await self._set_humidity_script.async_run(
+                    run_variables={ATTR_HUMIDITY: humidity}, context=self._context
+                )
             self.async_write_ha_state()
-
-        if self._set_humidity_script is not None:
-            await self._set_humidity_script.async_run(
-                run_variables={ATTR_HUMIDITY: humidity}, context=self._context
-            )
