@@ -232,6 +232,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._unit_of_measurement = hass.config.units.temperature_unit
         self._attr_supported_features = 0
 
+        if not hasattr(ClimateEntityFeature, "ON_OFF"):
+            ON_OFF_FEATURE = 1 << 8
+        else:
+            ON_OFF_FEATURE = ClimateEntityFeature.ON_OFF
+
+        if HVACMode.OFF in config[CONF_MODE_LIST] and len(config[CONF_MODE_LIST]) > 1:
+            self._attr_supported_features |= ON_OFF_FEATURE
+
         self._attr_hvac_modes = config[CONF_MODE_LIST]
         self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
         self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
@@ -726,6 +734,20 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def swing_modes(self):
         """List of available swing modes."""
         return self._swing_modes_list
+
+    async def async_turn_on(self):
+        """Turn the climate device on."""
+        if HVACMode.OFF in self._attr_hvac_modes:
+            self._current_operation = next(
+                mode for mode in self._attr_hvac_modes if mode != HVACMode.OFF
+            )
+            self.async_write_ha_state()
+
+    async def async_turn_off(self):
+        """Turn the climate device off."""
+        if HVACMode.OFF in self._attr_hvac_modes:
+            self._current_operation = HVACMode.OFF
+            self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode: str) -> None:
         """Set new operation mode."""
