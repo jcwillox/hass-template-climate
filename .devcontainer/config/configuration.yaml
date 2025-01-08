@@ -1,0 +1,118 @@
+# Loads default set of integrations. Do not remove.
+default_config:
+
+logger:
+  default: info
+  logs:
+    custom_components.auto_backup: debug
+
+climate:
+  - platform: climate_template
+    name: Bedroom Aircon
+    modes:
+      - "auto"
+      - "dry"
+      - "off"
+      - "cool"
+      - "fan_only"
+    min_temp: 16
+    max_temp: 30
+
+    current_temperature_template: '{{ states("sensor.bedroom_temperature") }}'
+    current_humidity_template: '{{ states("sensor.bedroom_humidity") }}'
+    # swing_mode_template: '{{ states("input_boolean.bedroom_swing_mode") }}'
+    # availability_template: '{{ is_state("binary_sensor.bedroom_node_status", "on") }}'
+
+    set_hvac_mode:
+      service: script.update_aircon_state
+
+    set_fan_mode:
+      service: script.update_aircon_state
+
+    set_temperature:
+      service: script.update_aircon_state
+
+    set_swing_mode:
+      service: script.update_aircon_state
+
+fan:
+  - platform: template
+    fans:
+      bedroom_fan:
+        friendly_name: "Bedroom Fan"
+        value_template: "{{ is_state('climate.bedroom_aircon', 'off') | iif('off', 'on') }}"
+        availability_template: "{{ not is_state('climate.bedroom_aircon', 'unavailable') }}"
+        percentage_template: |
+          {% set speeds = {
+            'auto': 25,
+            'low': 50,
+            'medium': 75,
+            'high': 100
+          } %}
+          {{ speeds[state_attr('climate.bedroom_aircon', 'fan_mode')] }}
+        preset_mode_template: "{{ state_attr('climate.bedroom_aircon', 'fan_mode') }}"
+        oscillating_template: "{{ is_state_attr('climate.bedroom_aircon', 'swing_mode', 'on') }}"
+        turn_on:
+          - condition: state
+            entity_id: climate.bedroom_aircon
+            state: "off"
+          - service: climate.set_hvac_mode
+            entity_id: climate.bedroom_aircon
+            data:
+              hvac_mode: fan_only
+        turn_off:
+          - condition: "{{ not is_state('climate.bedroom_aircon', 'off') }}"
+          - service: climate.turn_off
+            entity_id: climate.bedroom_aircon
+        set_percentage:
+          # if 0 turn off
+          service: climate.set_fan_mode
+          entity_id: climate.bedroom_aircon
+          data:
+            fan_mode: |
+              {% set speeds = {
+                25: 'auto',
+                50: 'low',
+                75: 'medium',
+                100: 'high'
+              } %}
+              {{ speeds[percentage] }}
+        set_preset_mode:
+          service: climate.set_fan_mode
+          entity_id: climate.bedroom_aircon
+          data:
+            fan_mode: "{{ preset_mode }}"
+        set_oscillating:
+          service: climate.set_swing_mode
+          entity_id: climate.bedroom_aircon
+          data:
+            swing_mode: "{{ iif(oscillating, 'on', 'off') }}"
+        speed_count: 4
+        preset_modes:
+          - "auto"
+          - "low"
+          - "medium"
+          - "high"
+
+script:
+  update_aircon_state:
+    alias: "Update Aircon State"
+    sequence:
+      - service: persistent_notification.create
+        data:
+          title: "Aircon State Update"
+          message: |
+            Vars:
+            * hvac_mode: {{ hvac_mode }}
+            * temperature: {{ temperature }}
+            * fan_mode: {{ fan_mode }}
+            * swing_mode: {{ swing_mode }}
+
+            Currently:
+            * temperature: {{ state_attr("climate.bedroom_aircon", "temperature") | int }}
+            * operation_mode: {{ states("climate.bedroom_aircon") }}
+            * fan_mode: {{ state_attr("climate.bedroom_aircon", "fan_mode") }}
+            * swing_mode: {{ is_state_attr("climate.bedroom_aircon", "swing_mode", "on") }}
+
+# If you need to debug uncomment the line below (doc: https://www.home-assistant.io/integrations/debugpy/)
+# debugpy:

@@ -1,0 +1,24 @@
+{
+  "editor.formatOnSave": true,
+  "editor.linkedEditing": true,
+  "editor.renderWhitespace": "trailing",
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"
+  },
+  "files.associations": {
+    "**/.github/workflows/*.yaml": "github-actions-workflow",
+    "**/.devcontainer/*.yaml": "home-assistant"
+  },
+  "[javascript][javascriptreact][typescript][typescriptreact][json][jsonc][yaml][html][markdown][postcss][css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "python.formatting.provider": "none",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
+  "yaml.customTags": [
+    "!ENV",
+    "tag:yaml.org,2002:python/name:materialx.emoji.twemoji",
+    "tag:yaml.org,2002:python/name:materialx.emoji.to_svg"
+  ]
+}
