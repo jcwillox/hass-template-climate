@@ -179,6 +179,9 @@ async def async_setup_platform(
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     """A template climate component."""
 
+    _attr_should_poll = False
+    _enable_turn_on_off_backwards_compatibility = False
+
     def __init__(self, hass: HomeAssistant, config: ConfigType):
         """Initialize the climate device."""
         super().__init__(
@@ -186,15 +189,25 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             availability_template=config.get(CONF_AVAILABILITY_TEMPLATE),
             icon_template=config.get(CONF_ICON_TEMPLATE),
             entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
+            unique_id=config.get(CONF_UNIQUE_ID, None),
         )
         self._config = config
-        self._attr_unique_id = config.get(CONF_UNIQUE_ID, None)
-        self._attr_name = config[CONF_NAME]
         self._min_temp_template = config.get(CONF_TEMP_MIN_TEMPLATE)
-        self._attr_min_temp = config[CONF_TEMP_MIN]
         self._max_temp_template = config.get(CONF_TEMP_MAX_TEMPLATE)
+
+        # set attrs
+        self._attr_name = config[CONF_NAME]
+        self._attr_min_temp = config[CONF_TEMP_MIN]
         self._attr_max_temp = config[CONF_TEMP_MAX]
         self._attr_target_temperature_step = config[CONF_TEMP_STEP]
+        self._attr_temperature_unit = hass.config.units.temperature_unit
+        self._attr_hvac_modes = config[CONF_MODE_LIST]
+        self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
+        self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
+        self._attr_swing_modes = config[CONF_SWING_MODE_LIST]
+
+        if (precision := config.get(CONF_PRECISION)) is not None:
+            self._attr_precision = precision
 
         self._current_temp = None
         self._current_humidity = None
@@ -207,8 +220,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._current_operation = HVACMode.OFF  # default optimistic state
         self._current_swing_mode = HVACMode.OFF  # default optimistic state
         self._target_temp = DEFAULT_TEMP  # default optimistic state
-        self._attr_target_temperature_high = None
-        self._attr_target_temperature_low = None
 
         self._current_temp_template = config.get(CONF_CURRENT_TEMP_TEMPLATE)
         self._current_humidity_template = config.get(CONF_CURRENT_HUMIDITY_TEMPLATE)
@@ -228,39 +239,13 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._swing_mode_template = config.get(CONF_SWING_MODE_TEMPLATE)
         self._hvac_action_template = config.get(CONF_HVAC_ACTION_TEMPLATE)
 
-        self._available = True
-        self._unit_of_measurement = hass.config.units.temperature_unit
-        self._attr_supported_features = 0
-
-        if HVACMode.OFF in config[CONF_MODE_LIST] and len(config[CONF_MODE_LIST]) > 1:
-            if not hasattr(ClimateEntityFeature, "ON_OFF"):
-                ON_OFF_FEATURE = 1 << 8
-            else:
-                ON_OFF_FEATURE = ClimateEntityFeature.ON_OFF
-            self._attr_supported_features |= ON_OFF_FEATURE
-
-            # Dynamically add turn_on and turn_off methods if needed
-            async def async_turn_on(self):
-                """Turn the climate device on."""
-                if HVACMode.OFF in self._attr_hvac_modes:
-                    self._current_operation = next(
-                        mode for mode in self._attr_hvac_modes if mode != HVACMode.OFF
-                    )
-                    self.async_write_ha_state()
-
-            async def async_turn_off(self):
-                """Turn the climate device off."""
-                if HVACMode.OFF in self._attr_hvac_modes:
-                    self._current_operation = HVACMode.OFF
-                    self.async_write_ha_state()
-
-            self.async_turn_on = async_turn_on.__get__(self)
-            self.async_turn_off = async_turn_off.__get__(self)
-
-        self._attr_hvac_modes = config[CONF_MODE_LIST]
-        self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
-        self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
-        self._swing_modes_list = config[CONF_SWING_MODE_LIST]
+        # set turn on/off features
+        if len(self._attr_hvac_modes) >= 2:
+            self._attr_supported_features |= ClimateEntityFeature.TURN_ON
+        if HVACMode.OFF in self._attr_hvac_modes:
+            self._attr_supported_features |= ClimateEntityFeature.TURN_OFF
+        elif len(self._attr_hvac_modes) > 1:
+            self._attr_supported_features |= ClimateEntityFeature.TURN_OFF
 
         self.entity_id = async_generate_entity_id(
             ENTITY_ID_FORMAT, config[CONF_NAME], hass=hass
@@ -647,7 +632,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
 
     def _update_swing_mode(self, swing_mode):
-        if swing_mode in self._swing_modes_list:
+        if swing_mode in self._attr_swing_modes:
             if (
                 self._current_swing_mode != swing_mode
             ):  # Only update if there's a change
@@ -657,7 +642,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             _LOGGER.error(
                 "Received invalid swing mode: %s. Expected: %s.",
                 swing_mode,
-                self._swing_modes_list,
+                self._attr_swing_modes,
             )
 
     def _update_hvac_action(self, hvac_action):
@@ -674,18 +659,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 hvac_action,
                 [member.value for member in HVACAction],
             )
-
-    @property
-    def precision(self):
-        """Return the precision of the system."""
-        if self._config.get(CONF_PRECISION) is not None:
-            return self._config.get(CONF_PRECISION)
-        return super().precision
-
-    @property
-    def temperature_unit(self):
-        """Return the unit of measurement."""
-        return self._unit_of_measurement
 
     @property
     def current_temperature(self):
@@ -756,11 +729,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def swing_mode(self):
         """Return the swing setting."""
         return self._current_swing_mode
-
-    @property
-    def swing_modes(self):
-        """List of available swing modes."""
-        return self._swing_modes_list
 
     async def async_set_hvac_mode(self, hvac_mode: str) -> None:
         """Set new operation mode."""
