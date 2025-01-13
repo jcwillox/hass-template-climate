@@ -212,6 +212,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_hvac_mode = HVACMode.OFF
         self._attr_swing_mode = HVACMode.OFF
         self._attr_target_temperature = DEFAULT_TEMP
+        self._attr_target_temperature_high = None
+        self._attr_target_temperature_low = None
 
         if (precision := config.get(CONF_PRECISION)) is not None:
             self._attr_precision = precision
