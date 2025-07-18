@@ -623,14 +623,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_fan_mode(self, fan_mode):
-        if fan_mode in self._attr_fan_modes:
-            if self._attr_fan_mode != fan_mode:  # Only update if there's a change
-                self._attr_fan_mode = fan_mode
+        fan_mode_str = str(fan_mode)
+        if fan_mode_str in self._attr_fan_modes:
+            if self._attr_fan_mode != fan_mode_str:  # Only update if there's a change
+                self._attr_fan_mode = fan_mode_str
                 self.async_write_ha_state()  # Update HA state without triggering an action
         elif fan_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
-                "Received invalid fan mode: %s. Expected: %s.",
+                "Received invalid fan mode: %s (str: %s). Expected: %s.",
                 fan_mode,
+                fan_mode_str,
                 self._attr_fan_modes,
             )
 
