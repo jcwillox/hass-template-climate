@@ -59,6 +59,7 @@ from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.template import Template
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,7 +105,6 @@ DOMAIN = "climate_template"
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
         vol.Optional(CONF_ICON_TEMPLATE): cv.template,
         vol.Optional(CONF_ENTITY_PICTURE_TEMPLATE): cv.template,
         vol.Optional(CONF_CURRENT_TEMP_TEMPLATE): cv.template,
@@ -183,14 +183,29 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     _enable_turn_on_off_backwards_compatibility = False
 
     def __init__(self, hass: HomeAssistant, config: ConfigType):
-        """Initialize the climate device."""
-        super().__init__(
-            hass,
-            availability_template=config.get(CONF_AVAILABILITY_TEMPLATE),
-            icon_template=config.get(CONF_ICON_TEMPLATE),
-            entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
-            unique_id=config.get(CONF_UNIQUE_ID, None),
+        # Save the raw name for entity_id
+        raw_name = config[CONF_NAME]
+    
+        # Make a copy of config for TemplateEntity, converting expected fields to Template objects
+        processed_config = dict(config)
+        for key in (
+            CONF_NAME,
+            CONF_AVAILABILITY_TEMPLATE,
+            CONF_ICON_TEMPLATE,
+            CONF_ENTITY_PICTURE_TEMPLATE,
+            # add other keys that should be Template objects if your integration uses them
+        ):
+            if config.get(key):
+                processed_config[key] = Template(config[key], hass)
+    
+        # Use raw_name for entity_id
+        self.entity_id = async_generate_entity_id(
+            ENTITY_ID_FORMAT, raw_name, hass=hass
         )
+    
+        # Now call super with processed config
+        super().__init__(hass, processed_config, config.get(CONF_UNIQUE_ID, None))
+
         self.hass = hass
         self.entity_id = async_generate_entity_id(
             ENTITY_ID_FORMAT, config[CONF_NAME], hass=hass
