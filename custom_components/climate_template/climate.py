@@ -56,6 +56,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import async_generate_entity_id
+from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.typing import ConfigType
@@ -101,6 +102,7 @@ DEFAULT_NAME = "Template Climate"
 DEFAULT_TEMP = 21
 DEFAULT_PRECISION = 1.0
 DOMAIN = "climate_template"
+PLATFORMS = ["climate"]
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     {
@@ -174,6 +176,7 @@ async def async_setup_platform(
     hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
 ):
     """Set up the Template Climate."""
+    await async_setup_reload_service(hass, DOMAIN, PLATFORMS)
     async_add_entities([TemplateClimate(hass, config)])
 
 
@@ -639,14 +642,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_fan_mode(self, fan_mode):
-        if fan_mode in self._attr_fan_modes:
-            if self._attr_fan_mode != fan_mode:  # Only update if there's a change
-                self._attr_fan_mode = fan_mode
+        fan_mode_str = str(fan_mode)
+        if fan_mode_str in self._attr_fan_modes:
+            if self._attr_fan_mode != fan_mode_str:  # Only update if there's a change
+                self._attr_fan_mode = fan_mode_str
                 self.async_write_ha_state()  # Update HA state without triggering an action
         elif fan_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
-                "Received invalid fan mode: %s. Expected: %s.",
+                "Received invalid fan mode: %s (str: %s). Expected: %s.",
                 fan_mode,
+                fan_mode_str,
                 self._attr_fan_modes,
             )
 
