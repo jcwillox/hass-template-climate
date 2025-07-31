@@ -56,6 +56,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import async_generate_entity_id
+from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.typing import ConfigType
@@ -100,6 +101,7 @@ DEFAULT_NAME = "Template Climate"
 DEFAULT_TEMP = 21
 DEFAULT_PRECISION = 1.0
 DOMAIN = "climate_template"
+PLATFORMS = ["climate"]
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     {
@@ -173,6 +175,7 @@ async def async_setup_platform(
     hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
 ):
     """Set up the Template Climate."""
+    await async_setup_reload_service(hass, DOMAIN, PLATFORMS)
     async_add_entities([TemplateClimate(hass, config)])
 
 
