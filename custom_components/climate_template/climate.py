@@ -94,18 +94,24 @@ CONF_SET_HVAC_MODE_ACTION = "set_hvac_mode"
 CONF_SET_FAN_MODE_ACTION = "set_fan_mode"
 CONF_SET_PRESET_MODE_ACTION = "set_preset_mode"
 CONF_SET_SWING_MODE_ACTION = "set_swing_mode"
+CONF_MODE_ACTION = "mode_action"
+CONF_MAX_ACTION = "max_action"
 
 CONF_CLIMATES = "climates"
 
 DEFAULT_NAME = "Template Climate"
 DEFAULT_TEMP = 21
 DEFAULT_PRECISION = 1.0
+DEFAULT_MODE_ACTION = "single"
+DEFAULT_MAX_ACTION = 1
 DOMAIN = "climate_template"
 PLATFORMS = ["climate"]
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+        vol.Optional(CONF_MODE_ACTION, default=DEFAULT_MODE_ACTION): vol.In(["parallel", "queued", "restart", "single"]),
+        vol.Optional(CONF_MAX_ACTION, default=DEFAULT_MAX_ACTION): cv.positive_int,
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
         vol.Optional(CONF_ICON_TEMPLATE): cv.template,
         vol.Optional(CONF_ENTITY_PICTURE_TEMPLATE): cv.template,
@@ -201,6 +207,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         # set attrs
         self._attr_name = config[CONF_NAME]
+        self._attr_mode_action = config[CONF_MODE_ACTION]
+        self._attr_max_action = config[CONF_MAX_ACTION]
         self._attr_min_temp = config[CONF_TEMP_MIN]
         self._attr_max_temp = config[CONF_TEMP_MAX]
         self._attr_target_temperature_step = config[CONF_TEMP_STEP]
@@ -261,20 +269,20 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._set_hvac_mode_script = None
         if set_hvac_mode_action := config.get(CONF_SET_HVAC_MODE_ACTION):
             self._set_hvac_mode_script = Script(
-                hass, set_hvac_mode_action, self._attr_name, DOMAIN
+                hass, set_hvac_mode_action, self._attr_name, DOMAIN, script_mode=self._attr_mode_action, max_runs=self._attr_max_action
             )
 
         self._set_swing_mode_script = None
         if set_swing_mode_action := config.get(CONF_SET_SWING_MODE_ACTION):
             self._set_swing_mode_script = Script(
-                hass, set_swing_mode_action, self._attr_name, DOMAIN
+                hass, set_swing_mode_action, self._attr_name, DOMAIN, script_mode=self._attr_mode_action, max_runs=self._attr_max_action
             )
             self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
 
         self._set_fan_mode_script = None
         if set_fan_mode_action := config.get(CONF_SET_FAN_MODE_ACTION):
             self._set_fan_mode_script = Script(
-                hass, set_fan_mode_action, self._attr_name, DOMAIN
+                hass, set_fan_mode_action, self._attr_name, DOMAIN, script_mode=self._attr_mode_action, max_runs=self._attr_max_action
             )
             self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
 
@@ -288,7 +296,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._set_temperature_script = None
         if set_temperature_action := config.get(CONF_SET_TEMPERATURE_ACTION):
             self._set_temperature_script = Script(
-                hass, set_temperature_action, self._attr_name, DOMAIN
+                hass, set_temperature_action, self._attr_name, DOMAIN, script_mode=self._attr_mode_action, max_runs=self._attr_max_action
             )
             if HVACMode.HEAT_COOL in self._attr_hvac_modes:
                 self._attr_supported_features |= (
