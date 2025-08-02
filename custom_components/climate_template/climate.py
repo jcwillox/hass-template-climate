@@ -7,7 +7,7 @@ import voluptuous as vol
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
-    ENTITY_ID_FORMAT,
+    DOMAIN as CLIMATE_DOMAIN,
 )
 from homeassistant.components.climate.const import (
     DEFAULT_MAX_TEMP,
@@ -40,22 +40,23 @@ from homeassistant.components.climate.const import (
     HVACAction,
 )
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
-from homeassistant.components.template.template_entity import TemplateEntity
+from homeassistant.components.template.helpers import async_setup_template_platform
+from homeassistant.components.template.template_entity import (
+    TemplateEntity,
+    TEMPLATE_ENTITY_COMMON_SCHEMA,
+)
 from homeassistant.const import (
     STATE_ON,
     PRECISION_HALVES,
     PRECISION_TENTHS,
     PRECISION_WHOLE,
     ATTR_TEMPERATURE,
-    CONF_NAME,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
     CONF_ICON_TEMPLATE,
     CONF_ENTITY_PICTURE_TEMPLATE,
-    CONF_UNIQUE_ID,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
@@ -104,8 +105,9 @@ DOMAIN = "climate_template"
 PLATFORMS = ["climate"]
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
+    TEMPLATE_ENTITY_COMMON_SCHEMA.schema
+).extend(
     {
-        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
         vol.Optional(CONF_ICON_TEMPLATE): cv.template,
         vol.Optional(CONF_ENTITY_PICTURE_TEMPLATE): cv.template,
@@ -166,7 +168,6 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
             [PRECISION_TENTHS, PRECISION_HALVES, PRECISION_WHOLE]
         ),
         vol.Optional(CONF_TEMP_STEP, default=DEFAULT_PRECISION): vol.Coerce(float),
-        vol.Optional(CONF_UNIQUE_ID): cv.string,
     }
 )
 
@@ -175,8 +176,17 @@ async def async_setup_platform(
     hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
 ):
     """Set up the Template Climate."""
-    await async_setup_reload_service(hass, DOMAIN, PLATFORMS)
-    async_add_entities([TemplateClimate(hass, config)])
+    await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
+    await async_setup_template_platform(
+        hass,
+        CLIMATE_DOMAIN,
+        config,
+        TemplateClimate,
+        None,
+        async_add_entities,
+        discovery_info,
+        {},
+    )
 
 
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
@@ -185,22 +195,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     _attr_should_poll = False
     _enable_turn_on_off_backwards_compatibility = False
 
-    def __init__(self, hass: HomeAssistant, config: ConfigType):
+    def __init__(self, hass: HomeAssistant, config: ConfigType, unique_id: str | None):
         """Initialize the climate device."""
-        super().__init__(
-            hass,
-            availability_template=config.get(CONF_AVAILABILITY_TEMPLATE),
-            icon_template=config.get(CONF_ICON_TEMPLATE),
-            entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
-            unique_id=config.get(CONF_UNIQUE_ID, None),
-        )
-        self.hass = hass
-        self.entity_id = async_generate_entity_id(
-            ENTITY_ID_FORMAT, config[CONF_NAME], hass=hass
-        )
+        super().__init__(hass, config, unique_id)
 
         # set attrs
-        self._attr_name = config[CONF_NAME]
         self._attr_min_temp = config[CONF_TEMP_MIN]
         self._attr_max_temp = config[CONF_TEMP_MAX]
         self._attr_target_temperature_step = config[CONF_TEMP_STEP]
