@@ -7,6 +7,7 @@ import voluptuous as vol
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
+    ENTITY_ID_FORMAT,
     DOMAIN as CLIMATE_DOMAIN,
 )
 from homeassistant.components.climate.const import (
@@ -193,6 +194,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     """A template climate component."""
 
     _attr_should_poll = False
+    _entity_id_format = ENTITY_ID_FORMAT
     _enable_turn_on_off_backwards_compatibility = False
 
     def __init__(self, hass: HomeAssistant, config: ConfigType, unique_id: str | None):
