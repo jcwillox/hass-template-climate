@@ -22,6 +22,7 @@ climate:
     current_humidity_template: '{{ states("sensor.bedroom_humidity") }}'
     # swing_mode_template: '{{ states("input_boolean.bedroom_swing_mode") }}'
     # availability_template: '{{ is_state("binary_sensor.bedroom_node_status", "on") }}'
+    target_temperature_high_template: "{{ 76 }}"
 
     set_hvac_mode:
       service: script.update_aircon_state
