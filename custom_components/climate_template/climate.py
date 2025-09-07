@@ -16,6 +16,7 @@ from homeassistant.components.climate.const import (
     ATTR_MIN_TEMP,
     ATTR_MAX_TEMP,
     ATTR_HVAC_MODE,
+    ATTR_HVAC_ACTION,
     ATTR_FAN_MODE,
     ATTR_PRESET_MODE,
     ATTR_SWING_MODE,
@@ -209,13 +210,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
         self._attr_swing_modes = config[CONF_SWING_MODE_LIST]
         # set optimistic default attrs
-        self._attr_fan_mode = FAN_LOW
+        self._attr_fan_mode = FAN_AUTO
         self._attr_preset_mode = PRESET_COMFORT
         self._attr_hvac_mode = HVACMode.OFF
         self._attr_swing_mode = HVACMode.OFF
         self._attr_target_temperature = DEFAULT_TEMP
         self._attr_target_temperature_high = None
         self._attr_target_temperature_low = None
+        self._attr_hvac_action = HVACAction.IDLE
 
         if (precision := config.get(CONF_PRECISION)) is not None:
             self._attr_precision = precision
@@ -340,6 +342,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
             self._attr_swing_mode = previous_state.attributes.get(
                 ATTR_SWING_MODE, HVACMode.OFF
+            )
+            self._attr_hvac_action = previous_state.attributes.get(
+                ATTR_HVAC_ACTION, HVACAction.IDLE
             )
 
             if current_temperature := previous_state.attributes.get(
@@ -499,7 +504,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_min_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp is not None and temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_min_temp = float(temp)
             except ValueError:
@@ -507,7 +512,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_max_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp is not None and temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_max_temp = float(temp)
             except ValueError:
@@ -515,7 +520,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_current_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp is not None and temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_current_temperature = float(temp)
             except ValueError:
@@ -523,7 +528,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_current_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if humidity is not None and humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_current_humidity = int(humidity)
             except ValueError:
@@ -531,7 +536,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_min_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if humidity is not None and humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_min_humidity = float(humidity)
             except ValueError:
@@ -539,7 +544,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_max_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if humidity is not None and humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_max_humidity = float(humidity)
             except ValueError:
@@ -547,7 +552,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if humidity is not None and humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 new_humidity = float(humidity)
                 if (
@@ -560,7 +565,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp is not None and temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp = float(temp)
@@ -574,7 +579,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_temp_high(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp is not None and temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp_high = float(temp)
@@ -586,7 +591,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_temp_low(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp is not None and temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp_low = float(temp)
