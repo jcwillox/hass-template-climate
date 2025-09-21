@@ -42,7 +42,9 @@ from homeassistant.components.climate.const import (
 )
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
 from homeassistant.components.template.helpers import async_setup_template_platform
-from homeassistant.components.template.schemas import make_template_entity_base_schema
+from homeassistant.components.template.schemas import (
+    make_template_entity_common_modern_attributes_schema,
+)
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.const import (
     STATE_ON,
@@ -104,7 +106,9 @@ DOMAIN = "climate_template"
 PLATFORMS = ["climate"]
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
-    make_template_entity_base_schema(CLIMATE_DOMAIN, DEFAULT_NAME).schema
+    make_template_entity_common_modern_attributes_schema(
+        CLIMATE_DOMAIN, DEFAULT_NAME
+    ).schema
 ).extend(
     {
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
