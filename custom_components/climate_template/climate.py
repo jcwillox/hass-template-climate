@@ -19,6 +19,7 @@ from homeassistant.components.climate.const import (
     ATTR_FAN_MODE,
     ATTR_PRESET_MODE,
     ATTR_SWING_MODE,
+    ATTR_SWING_HORIZONTAL_MODE,
     ATTR_CURRENT_TEMPERATURE,
     ATTR_CURRENT_HUMIDITY,
     ATTR_MIN_HUMIDITY,
@@ -67,6 +68,8 @@ CONF_FAN_MODE_LIST = "fan_modes"
 CONF_PRESET_MODE_LIST = "preset_modes"
 CONF_MODE_LIST = "modes"
 CONF_SWING_MODE_LIST = "swing_modes"
+CONF_SWING_HORIZONTAL_MODE_LIST = "swing_horizontal_modes"
+
 CONF_TEMP_MIN_TEMPLATE = "min_temp_template"
 CONF_TEMP_MIN = "min_temp"
 CONF_TEMP_MAX_TEMPLATE = "max_temp_template"
@@ -86,6 +89,7 @@ CONF_HVAC_MODE_TEMPLATE = "hvac_mode_template"
 CONF_FAN_MODE_TEMPLATE = "fan_mode_template"
 CONF_PRESET_MODE_TEMPLATE = "preset_mode_template"
 CONF_SWING_MODE_TEMPLATE = "swing_mode_template"
+CONF_SWING_HORIZONTAL_MODE_TEMPLATE = "swing_horizontal_mode_template"
 CONF_HVAC_ACTION_TEMPLATE = "hvac_action_template"
 
 CONF_SET_HUMIDITY_ACTION = "set_humidity"
@@ -94,6 +98,7 @@ CONF_SET_HVAC_MODE_ACTION = "set_hvac_mode"
 CONF_SET_FAN_MODE_ACTION = "set_fan_mode"
 CONF_SET_PRESET_MODE_ACTION = "set_preset_mode"
 CONF_SET_SWING_MODE_ACTION = "set_swing_mode"
+CONF_SET_SWING_HORIZONTAL_MODE_ACTION = "set_swing_horizontal_mode"
 
 CONF_CLIMATES = "climates"
 
@@ -122,6 +127,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_FAN_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_PRESET_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
+        vol.Optional(CONF_SWING_HORIZONTAL_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_HUMIDITY_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
@@ -129,6 +135,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_SET_FAN_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_PRESET_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_SWING_MODE_ACTION): cv.SCRIPT_SCHEMA,
+        vol.Optional(CONF_SET_SWING_HORIZONTAL_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(
             CONF_MODE_LIST,
             default=[
@@ -158,6 +165,9 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         ): cv.ensure_list,
         vol.Optional(
             CONF_SWING_MODE_LIST, default=[STATE_ON, HVACMode.OFF]
+        ): cv.ensure_list,
+        vol.Optional(
+            CONF_SWING_HORIZONTAL_MODE_LIST, default=[STATE_ON, HVACMode.OFF]
         ): cv.ensure_list,
         vol.Optional(CONF_TEMP_MIN_TEMPLATE): cv.template,
         vol.Optional(CONF_TEMP_MIN, default=DEFAULT_MIN_TEMP): vol.Coerce(float),
@@ -208,11 +218,13 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
         self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
         self._attr_swing_modes = config[CONF_SWING_MODE_LIST]
+        self._attr_swing_horizontal_modes = config[CONF_SWING_HORIZONTAL_MODE_LIST]
         # set optimistic default attrs
         self._attr_fan_mode = FAN_LOW
         self._attr_preset_mode = PRESET_COMFORT
         self._attr_hvac_mode = HVACMode.OFF
         self._attr_swing_mode = HVACMode.OFF
+        self._attr_swing_horizontal_mode = HVACMode.OFF
         self._attr_target_temperature = DEFAULT_TEMP
         self._attr_target_temperature_high = None
         self._attr_target_temperature_low = None
@@ -239,6 +251,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._fan_mode_template = config.get(CONF_FAN_MODE_TEMPLATE)
         self._preset_mode_template = config.get(CONF_PRESET_MODE_TEMPLATE)
         self._swing_mode_template = config.get(CONF_SWING_MODE_TEMPLATE)
+        self._swing_horizontal_mode_template = config.get(CONF_SWING_HORIZONTAL_MODE_TEMPLATE)
         self._hvac_action_template = config.get(CONF_HVAC_ACTION_TEMPLATE)
 
         # set turn on/off features
@@ -269,6 +282,13 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 hass, set_swing_mode_action, self._attr_name, DOMAIN
             )
             self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
+
+        self._set_swing_horizontal_mode_script = None
+        if set_swing_horizontal_mode_action := config.get(CONF_SET_SWING_HORIZONTAL_MODE_ACTION):
+            self._set_swing_horizontal_mode_script = Script(
+                hass, set_swing_horizontal_mode_action, self._attr_name, DOMAIN
+            )
+            self._attr_supported_features |= ClimateEntityFeature.SWING_HORIZONTAL_MODE
 
         self._set_fan_mode_script = None
         if set_fan_mode_action := config.get(CONF_SET_FAN_MODE_ACTION):
@@ -340,6 +360,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
             self._attr_swing_mode = previous_state.attributes.get(
                 ATTR_SWING_MODE, HVACMode.OFF
+            )
+            self._attr_swing_horizontal_mode = previous_state.attributes.get(
+                ATTR_SWING_HORIZONTAL_MODE, HVACMode.OFF
             )
 
             if current_temperature := previous_state.attributes.get(
@@ -484,6 +507,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._swing_mode_template,
                 None,
                 self._update_swing_mode,
+                none_on_template_error=True,
+            )
+
+        if self._swing_horizontal_mode_template:
+            self.add_template_attribute(
+                "_attr_swing_horizontal_mode",
+                self._swing_horizontal_mode_template,
+                None,
+                self._update_swing_horizontal_mode,
                 none_on_template_error=True,
             )
 
@@ -652,6 +684,19 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
 
     @callback
+    def _update_swing_horizontal_mode(self, swing_horizontal_mode):
+        if swing_horizontal_mode in self._attr_swing_horizontal_modes:
+            if self._attr_swing_horizontal_mode != swing_horizontal_mode:  # Only update if there's a change
+                self._attr_swing_horizontal_mode = swing_horizontal_mode
+                self.async_write_ha_state()  # Update HA state without triggering an action
+        elif swing_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            _LOGGER.error(
+                "Received invalid swing mode: %s. Expected: %s.",
+                swing_horizontal_mode,
+                self._attr_swing_horizontal_modes,
+            )
+
+    @callback
     def _update_hvac_action(self, hvac_action):
         if hvac_action in HVACAction or hvac_action is None:
             if self._attr_hvac_action != hvac_action:  # Only update if there's a change
@@ -740,6 +785,19 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             await self.async_run_script(
                 self._set_swing_mode_script,
                 run_variables={ATTR_SWING_MODE: swing_mode},
+                context=self._context,
+            )
+
+    async def async_set_swing_horizontal_mode(self, swing_horizontal_mode: str) -> None:
+        """Set new swing horizontal mode."""
+        if self._swing_horizontal_mode_template is None:  # use optimistic mode
+            self._attr_swing_horizontal_mode = swing_horizontal_mode
+            self.async_write_ha_state()
+
+        if self._set_swing_horizontal_mode_script:
+            await self.async_run_script(
+                self._set_swing_horizontal_mode_script,
+                run_variables={ATTR_SWING_HORIZONTAL_MODE: swing_horizontal_mode},
                 context=self._context,
             )
 
