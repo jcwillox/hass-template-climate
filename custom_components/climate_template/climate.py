@@ -254,7 +254,7 @@ async def async_setup_platform(
             TemplateClimate,
             async_add_entities,
             hass,
-            [rewrite_legacy_to_modern_config(hass, CLIMATE_DOMAIN, config)],
+            [rewrite_legacy_to_modern_config(hass, config)],
             None,
         )
 
