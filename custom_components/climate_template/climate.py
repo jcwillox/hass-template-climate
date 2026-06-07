@@ -1,22 +1,26 @@
 """Support for Template climates."""
 
 import logging
+from typing import Any
 
-import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+
 from homeassistant.components.climate import (
+    DOMAIN as CLIMATE_DOMAIN,
+    ENTITY_ID_FORMAT,
     ClimateEntity,
     ClimateEntityFeature,
-    ENTITY_ID_FORMAT,
-    DOMAIN as CLIMATE_DOMAIN,
 )
 from homeassistant.components.climate.const import (
-    DEFAULT_MAX_TEMP,
-    DEFAULT_MIN_TEMP,
-    ATTR_MIN_TEMP,
-    ATTR_MAX_TEMP,
-    ATTR_HVAC_MODE,
+    ATTR_CURRENT_HUMIDITY,
+    ATTR_CURRENT_TEMPERATURE,
     ATTR_FAN_MODE,
+    ATTR_HUMIDITY,
+    ATTR_HVAC_MODE,
+    ATTR_MAX_HUMIDITY,
+    ATTR_MAX_TEMP,
+    ATTR_MIN_HUMIDITY,
+    ATTR_MIN_TEMP,
     ATTR_PRESET_MODE,
     ATTR_SWING_MODE,
     ATTR_SWING_HORIZONTAL_MODE,
@@ -25,10 +29,14 @@ from homeassistant.components.climate.const import (
     ATTR_MIN_HUMIDITY,
     ATTR_MAX_HUMIDITY,
     ATTR_HUMIDITY,
+    ATTR_TARGET_TEMP_HIGH,
+    ATTR_TARGET_TEMP_LOW,
+    DEFAULT_MAX_TEMP,
+    DEFAULT_MIN_TEMP,
     FAN_AUTO,
+    FAN_HIGH,
     FAN_LOW,
     FAN_MEDIUM,
-    FAN_HIGH,
     PRESET_ACTIVITY,
     PRESET_AWAY,
     PRESET_BOOST,
@@ -36,31 +44,45 @@ from homeassistant.components.climate.const import (
     PRESET_ECO,
     PRESET_HOME,
     PRESET_SLEEP,
-    ATTR_TARGET_TEMP_HIGH,
-    ATTR_TARGET_TEMP_LOW,
-    HVACMode,
     HVACAction,
+    HVACMode,
 )
-from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
-from homeassistant.components.template.helpers import async_setup_template_platform
+from homeassistant.components.template.const import (
+    CONF_AVAILABILITY,
+    CONF_AVAILABILITY_TEMPLATE,
+    CONF_DEFAULT_ENTITY_ID,
+    CONF_PICTURE,
+)
+from homeassistant.components.template.helpers import (
+    async_create_template_tracking_entities,
+)
 from homeassistant.components.template.schemas import make_template_entity_base_schema
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.const import (
-    STATE_ON,
+    ATTR_ENTITY_ID,
+    ATTR_TEMPERATURE,
+    CONF_ENTITY_PICTURE_TEMPLATE,
+    CONF_FRIENDLY_NAME,
+    CONF_ICON,
+    CONF_ICON_TEMPLATE,
+    CONF_NAME,
+    CONF_STATE,
+    CONF_VALUE_TEMPLATE,
     PRECISION_HALVES,
     PRECISION_TENTHS,
     PRECISION_WHOLE,
-    ATTR_TEMPERATURE,
-    STATE_UNKNOWN,
+    STATE_ON,
     STATE_UNAVAILABLE,
-    CONF_ICON_TEMPLATE,
-    CONF_ENTITY_PICTURE_TEMPLATE,
+    STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import template
+import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -180,22 +202,76 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     }
 )
 
+LEGACY_FIELDS = {
+    CONF_AVAILABILITY_TEMPLATE: CONF_AVAILABILITY,
+    CONF_ENTITY_PICTURE_TEMPLATE: CONF_PICTURE,
+    CONF_FRIENDLY_NAME: CONF_NAME,
+    CONF_ICON_TEMPLATE: CONF_ICON,
+    CONF_VALUE_TEMPLATE: CONF_STATE,
+}
+
+
+def rewrite_legacy_to_modern_config(
+    hass: HomeAssistant,
+    entity_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    """Rewrite legacy config."""
+    entity_cfg = {**entity_cfg}
+
+    # Remove deprecated entity_id field from legacy syntax
+    entity_cfg.pop(ATTR_ENTITY_ID, None)
+
+    for from_key, to_key in LEGACY_FIELDS.items():
+        if from_key not in entity_cfg or to_key in entity_cfg:
+            continue
+
+        val = entity_cfg.pop(from_key)
+        if isinstance(val, str):
+            val = template.Template(val, hass)
+        entity_cfg[to_key] = val
+
+    if CONF_NAME in entity_cfg and isinstance(entity_cfg[CONF_NAME], str):
+        entity_cfg[CONF_NAME] = template.Template(entity_cfg[CONF_NAME], hass)
+
+    return entity_cfg
+
+
+def rewrite_legacy_to_modern_configs(
+    hass: HomeAssistant,
+    domain: str,
+    entity_cfg: dict[str, dict],
+) -> list[dict]:
+    """Rewrite legacy configuration definitions to modern ones."""
+    entities = []
+    for object_id, entity_conf in entity_cfg.items():
+        entity_conf = {**entity_conf, CONF_DEFAULT_ENTITY_ID: f"{domain}.{object_id}"}
+
+        entity_conf = rewrite_legacy_to_modern_config(hass, entity_conf)
+
+        if CONF_NAME not in entity_conf:
+            entity_conf[CONF_NAME] = template.Template(object_id, hass)
+
+        entities.append(entity_conf)
+
+    return entities
+
 
 async def async_setup_platform(
-    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
 ):
     """Set up the Template Climate."""
-    await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
-    await async_setup_template_platform(
-        hass,
-        CLIMATE_DOMAIN,
-        config,
-        TemplateClimate,
-        None,
-        async_add_entities,
-        discovery_info,
-        {},
-    )
+    if discovery_info is None:
+        await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
+        async_create_template_tracking_entities(
+            TemplateClimate,
+            async_add_entities,
+            hass,
+            [rewrite_legacy_to_modern_config(hass, config)],
+            None,
+        )
 
 
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
@@ -205,7 +281,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     _entity_id_format = ENTITY_ID_FORMAT
     _enable_turn_on_off_backwards_compatibility = False
 
-    def __init__(self, hass: HomeAssistant, config: ConfigType, unique_id: str | None):
+    def __init__(
+        self, hass: HomeAssistant, config: ConfigType, unique_id: str | None
+    ) -> None:
         """Initialize the climate device."""
         super().__init__(hass, config, unique_id)
 
@@ -257,9 +335,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         # set turn on/off features
         if len(self._attr_hvac_modes) >= 2:
             self._attr_supported_features |= ClimateEntityFeature.TURN_ON
-        if HVACMode.OFF in self._attr_hvac_modes:
-            self._attr_supported_features |= ClimateEntityFeature.TURN_OFF
-        elif len(self._attr_hvac_modes) > 1:
+        if HVACMode.OFF in self._attr_hvac_modes or len(self._attr_hvac_modes) > 1:
             self._attr_supported_features |= ClimateEntityFeature.TURN_OFF
 
         # set script variables
