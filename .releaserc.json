@@ -17,7 +17,9 @@
     [
       "@semantic-release/github",
       {
-        "assets": [{ "path": "climate_template.zip", "label": "climate_template.zip" }]
+        "assets": [{ "path": "climate_template.zip", "label": "climate_template.zip" }],
+        "successComment": false,
+        "failComment": false
       }
     ],
     [
