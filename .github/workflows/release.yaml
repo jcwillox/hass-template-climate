@@ -26,6 +26,9 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: "Install yq"
+        uses: mikefarah/yq@v4.45.1
+
       - name: "Install semantic-release"
         run: >
           npm install -g
