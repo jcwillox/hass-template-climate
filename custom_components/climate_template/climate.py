@@ -91,6 +91,7 @@ CONF_TEMP_MAX = "max_temp"
 CONF_PRECISION = "precision"
 CONF_CURRENT_TEMP_TEMPLATE = "current_temperature_template"
 CONF_TEMP_STEP = "temp_step"
+CONF_TEMP_STEP_TEMPLATE = "temp_step_template"
 
 CONF_CURRENT_HUMIDITY_TEMPLATE = "current_humidity_template"
 CONF_MIN_HUMIDITY_TEMPLATE = "min_humidity_template"
@@ -140,6 +141,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_PRESET_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
+        vol.Optional(CONF_TEMP_STEP_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_HUMIDITY_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HVAC_MODE_ACTION): cv.SCRIPT_SCHEMA,
@@ -296,6 +298,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         # set template properties
         self._min_temp_template = config.get(CONF_TEMP_MIN_TEMPLATE)
         self._max_temp_template = config.get(CONF_TEMP_MAX_TEMPLATE)
+        self._temp_step_template = config.get(CONF_TEMP_STEP_TEMPLATE)
         self._current_temp_template = config.get(CONF_CURRENT_TEMP_TEMPLATE)
         self._current_humidity_template = config.get(CONF_CURRENT_HUMIDITY_TEMPLATE)
         self._min_humidity_template = config.get(CONF_MIN_HUMIDITY_TEMPLATE)
@@ -566,6 +569,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._update_hvac_action,
                 none_on_template_error=True,
             )
+
+        if self._temp_step_template:
+            self.add_template_attribute(
+                "_attr_target_temperature_step",
+                self._temp_step_template,
+                None,
+                self._update_temp_step,
+                none_on_template_error=True,
+            )
         super()._async_setup_templates()
 
     @callback
@@ -734,6 +746,17 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 hvac_action,
                 [str(member) for member in HVACAction],
             )
+
+    @callback
+    def _update_temp_step(self, temp_step):
+        if temp_step not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            try:
+                new_step = float(temp_step)
+                if new_step != self._attr_target_temperature_step:
+                    self._attr_target_temperature_step = new_step
+                    self.async_write_ha_state()
+            except ValueError:
+                _LOGGER.error("Could not parse temp step from %s", temp_step)
 
     @property
     def target_temperature(self):
