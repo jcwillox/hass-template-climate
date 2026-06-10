@@ -6,24 +6,6 @@ on:
       - "beta"
       - "alpha"
   workflow_dispatch:
-    inputs:
-      draft:
-        type: boolean
-        description: "Draft release"
-        default: false
-      release_type:
-        type: choice
-        description: "Release type"
-        default: "auto"
-        options:
-          - "auto"
-          - "patch"
-          - "minor"
-          - "major"
-
-defaults:
-  run:
-    working-directory: custom_components/climate_template
 
 jobs:
   publish:
@@ -36,19 +18,24 @@ jobs:
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: "Setup node"
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
-      - name: "Release Package 📦"
-        run: corepack enable && pnpm dlx @jcwillox/semantic-release-config
+      - name: "Install semantic-release"
+        run: >
+          npm install -g
+          semantic-release
+          @semantic-release/changelog
+          @semantic-release/exec
+          @semantic-release/git
+          @semantic-release/github
+
+      - name: "Release Package"
+        run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SEMANTIC_RELEASE_GITHUB_DRAFT: ${{ inputs.draft }}
-          SEMANTIC_RELEASE_FORCE_RELEASE: ${{ inputs.release_type }}
-          SEMANTIC_RELEASE_CMD_PREPARE: |
-            yq -i '.version = "${nextRelease.version}"' manifest.json
-            zip climate_template.zip -r ./
-          SEMANTIC_RELEASE_GITHUB_ASSETS: "climate_template.zip"
