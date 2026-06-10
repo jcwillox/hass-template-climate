@@ -1,11 +1,15 @@
 {
   "domain": "climate_template",
   "name": "Climate Template",
-  "codeowners": ["@bernadoDavinci"],
-  "dependencies": ["template"],
+  "codeowners": [
+    "@bernadoDavinci"
+  ],
+  "dependencies": [
+    "template"
+  ],
   "documentation": "https://github.com/bernadoDavinci/hass-template-climate",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/bernadoDavinci/hass-template-climate/issues",
   "requirements": [],
-  "version": "0.0.0"
+  "version": "1.0.0"
 }
