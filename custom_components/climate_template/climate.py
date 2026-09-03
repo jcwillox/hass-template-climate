@@ -578,7 +578,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_min_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_min_temp = float(temp)
             except ValueError:
@@ -586,7 +586,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_max_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_max_temp = float(temp)
             except ValueError:
@@ -594,7 +594,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_current_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_current_temperature = float(temp)
             except ValueError:
@@ -602,7 +602,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_current_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if humidity not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_current_humidity = int(humidity)
             except ValueError:
@@ -610,7 +610,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_min_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if humidity not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_min_humidity = float(humidity)
             except ValueError:
@@ -618,7 +618,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_max_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if humidity not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._attr_max_humidity = float(humidity)
             except ValueError:
@@ -626,7 +626,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_humidity(self, humidity):
-        if humidity not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if humidity not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 new_humidity = float(humidity)
                 if (
@@ -639,7 +639,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_temp(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp = float(temp)
@@ -653,7 +653,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_temp_high(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp_high = float(temp)
@@ -665,7 +665,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     @callback
     def _update_target_temp_low(self, temp):
-        if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        if temp not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp_low = float(temp)
@@ -682,7 +682,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if self._attr_hvac_mode != hvac_mode:  # Only update if there's a change
                 self._attr_hvac_mode = hvac_mode
                 self.async_write_ha_state()  # Update HA state without triggering an action
-        elif hvac_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        elif hvac_mode not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
                 "Received invalid hvac mode: %s. Expected: %s.",
                 hvac_mode,
@@ -695,7 +695,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if self._attr_preset_mode != preset_mode:  # Only update if there's a change
                 self._attr_preset_mode = preset_mode
                 self.async_write_ha_state()  # Update HA state without triggering an action
-        elif preset_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        elif preset_mode not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
                 "Received invalid preset mode %s. Expected %s.",
                 preset_mode,
@@ -709,7 +709,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if self._attr_fan_mode != fan_mode_str:  # Only update if there's a change
                 self._attr_fan_mode = fan_mode_str
                 self.async_write_ha_state()  # Update HA state without triggering an action
-        elif fan_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        elif fan_mode not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
                 "Received invalid fan mode: %s (str: %s). Expected: %s.",
                 fan_mode,
@@ -723,7 +723,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if self._attr_swing_mode != swing_mode:  # Only update if there's a change
                 self._attr_swing_mode = swing_mode
                 self.async_write_ha_state()  # Update HA state without triggering an action
-        elif swing_mode not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        elif swing_mode not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
                 "Received invalid swing mode: %s. Expected: %s.",
                 swing_mode,
@@ -736,7 +736,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if self._attr_hvac_action != hvac_action:  # Only update if there's a change
                 self._attr_hvac_action = hvac_action
                 self.async_write_ha_state()  # Update HA state without triggering an action
-        elif hvac_action not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        elif hvac_action not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.error(
                 "Received invalid hvac action: %s. Expected: %s.",
                 hvac_action,
