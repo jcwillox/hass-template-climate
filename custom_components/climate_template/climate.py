@@ -404,10 +404,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if previous_state.state in self._attr_hvac_modes:
                 self._attr_hvac_mode = HVACMode(previous_state.state)
 
-            if temperature := previous_state.attributes.get(
-                ATTR_TEMPERATURE, DEFAULT_TEMP
-            ):
+            if (
+                temperature := previous_state.attributes.get(ATTR_TEMPERATURE)
+            ) is not None:
                 self._attr_target_temperature = float(temperature)
+                
             if temperature_high := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH):
                 self._attr_target_temperature_high = float(temperature_high)
             if temperature_low := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW):
