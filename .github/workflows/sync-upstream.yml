@@ -1,0 +1,61 @@
+name: Sync upstream
+
+on:
+  schedule:
+    # Run at 03:00 Europe/Vienna in both standard and daylight time.
+    - cron: "0 1,2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check local time
+        id: local-time
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+             [[ "$(TZ=Europe/Vienna date +%H)" == "03" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout fork
+        if: steps.local-time.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Merge and push upstream changes
+        if: steps.local-time.outputs.run == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch \
+            https://github.com/jcwillox/hass-template-climate.git \
+            main:refs/remotes/upstream/main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Fork is already up to date."
+            exit 0
+          fi
+
+          git merge \
+            --no-edit \
+            -m "chore: merge upstream changes" \
+            upstream/main
+
+          git push origin HEAD:main
