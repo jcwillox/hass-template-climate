@@ -115,15 +115,6 @@ jobs:
             fi
           fi
 
-          if git rev-parse --verify --quiet "refs/tags/${tag}^{commit}" >/dev/null; then
-            tag_commit=$(git rev-parse "refs/tags/${tag}^{commit}")
-            head_commit=$(git rev-parse HEAD)
-            if [[ "$tag_commit" != "$head_commit" ]]; then
-              echo "Tag ${tag} already points to ${tag_commit}, not ${head_commit}." >&2
-              exit 1
-            fi
-          fi
-
           python3 - <<'PY'
           from pathlib import Path
           from zipfile import ZIP_DEFLATED, ZipFile
