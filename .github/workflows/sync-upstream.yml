@@ -37,7 +37,7 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Merge and push upstream changes
+      - name: Merge upstream and bump version
         if: steps.local-time.outputs.run == 'true'
         shell: bash
         run: |
@@ -88,3 +88,58 @@ jobs:
           git add custom_components/climate_template/manifest.json
           git commit --amend --no-edit
           git push origin HEAD:main
+
+      - name: Build and publish missing release
+        if: steps.local-time.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          version=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest_path = Path("custom_components/climate_template/manifest.json")
+          print(json.loads(manifest_path.read_text())["version"])
+          PY
+          )
+          tag="v${version}"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            if gh release view "$tag" --json assets \
+              --jq 'any(.assets[]; .name == "climate_template.zip")' \
+              | grep -qx true; then
+              echo "Release ${tag} already exists with its ZIP asset."
+              exit 0
+            fi
+          fi
+
+          if git rev-parse --verify --quiet "refs/tags/${tag}^{commit}" >/dev/null; then
+            tag_commit=$(git rev-parse "refs/tags/${tag}^{commit}")
+            head_commit=$(git rev-parse HEAD)
+            if [[ "$tag_commit" != "$head_commit" ]]; then
+              echo "Tag ${tag} already points to ${tag_commit}, not ${head_commit}." >&2
+              exit 1
+            fi
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          source = Path("custom_components/climate_template")
+          with ZipFile("climate_template.zip", "w", ZIP_DEFLATED) as archive:
+              for path in sorted(source.rglob("*")):
+                  if path.is_file() and "__pycache__" not in path.parts:
+                      archive.write(path, path.relative_to(source))
+          PY
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" climate_template.zip --clobber
+          else
+            gh release create "$tag" climate_template.zip \
+              --target "$(git rev-parse HEAD)" \
+              --title "$tag" \
+              --generate-notes
+          fi
