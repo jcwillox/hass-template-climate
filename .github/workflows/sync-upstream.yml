@@ -1,0 +1,136 @@
+name: Sync upstream
+
+on:
+  schedule:
+    # Run at 03:00 Europe/Vienna in both standard and daylight time.
+    - cron: "0 1,2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check local time
+        id: local-time
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+             [[ "$(TZ=Europe/Vienna date +%H)" == "03" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout fork
+        if: steps.local-time.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Merge upstream and bump version
+        if: steps.local-time.outputs.run == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch \
+            https://github.com/jcwillox/hass-template-climate.git \
+            main:refs/remotes/upstream/main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Fork is already up to date."
+            exit 0
+          fi
+
+          next_version=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest_path = Path("custom_components/climate_template/manifest.json")
+          version = json.loads(manifest_path.read_text())["version"]
+
+          try:
+              major, minor, patch = map(int, version.split("."))
+          except ValueError as error:
+              raise SystemExit(f"Unsupported manifest version: {version}") from error
+
+          print(f"{major}.{minor}.{patch + 1}")
+          PY
+          )
+
+          git merge \
+            --no-edit \
+            -m "chore: merge upstream changes" \
+            upstream/main
+
+          NEXT_VERSION="$next_version" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_path = Path("custom_components/climate_template/manifest.json")
+          manifest = json.loads(manifest_path.read_text())
+          manifest["version"] = os.environ["NEXT_VERSION"]
+          manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
+          git add custom_components/climate_template/manifest.json
+          git commit --amend --no-edit
+          git push origin HEAD:main
+
+      - name: Build and publish missing release
+        if: steps.local-time.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          version=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest_path = Path("custom_components/climate_template/manifest.json")
+          print(json.loads(manifest_path.read_text())["version"])
+          PY
+          )
+          tag="v${version}"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            if gh release view "$tag" --json assets \
+              --jq 'any(.assets[]; .name == "climate_template.zip")' \
+              | grep -qx true; then
+              echo "Release ${tag} already exists with its ZIP asset."
+              exit 0
+            fi
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          source = Path("custom_components/climate_template")
+          with ZipFile("climate_template.zip", "w", ZIP_DEFLATED) as archive:
+              for path in sorted(source.rglob("*")):
+                  if path.is_file() and "__pycache__" not in path.parts:
+                      archive.write(path, path.relative_to(source))
+          PY
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" climate_template.zip --clobber
+          else
+            gh release create "$tag" climate_template.zip \
+              --target "$(git rev-parse HEAD)" \
+              --title "$tag" \
+              --generate-notes
+          fi
