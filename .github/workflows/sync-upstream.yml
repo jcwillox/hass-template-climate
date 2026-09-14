@@ -53,9 +53,38 @@ jobs:
             exit 0
           fi
 
+          next_version=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest_path = Path("custom_components/climate_template/manifest.json")
+          version = json.loads(manifest_path.read_text())["version"]
+
+          try:
+              major, minor, patch = map(int, version.split("."))
+          except ValueError as error:
+              raise SystemExit(f"Unsupported manifest version: {version}") from error
+
+          print(f"{major}.{minor}.{patch + 1}")
+          PY
+          )
+
           git merge \
             --no-edit \
             -m "chore: merge upstream changes" \
             upstream/main
 
+          NEXT_VERSION="$next_version" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_path = Path("custom_components/climate_template/manifest.json")
+          manifest = json.loads(manifest_path.read_text())
+          manifest["version"] = os.environ["NEXT_VERSION"]
+          manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
+          git add custom_components/climate_template/manifest.json
+          git commit --amend --no-edit
           git push origin HEAD:main
