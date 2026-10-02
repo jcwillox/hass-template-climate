@@ -51,7 +51,14 @@ from homeassistant.components.template.const import (
 from homeassistant.components.template.helpers import (
     async_create_template_tracking_entities,
 )
-from homeassistant.components.template.schemas import make_template_entity_base_schema
+try:
+    from homeassistant.components.template.schemas import (
+        make_template_entity_common_schema,
+    )
+except ImportError:
+    from homeassistant.components.template.schemas import (
+        make_template_entity_base_schema as make_template_entity_common_schema,
+    )
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -125,8 +132,7 @@ DOMAIN = "climate_template"
 PLATFORMS = ["climate"]
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
-    make_template_entity_base_schema(CLIMATE_DOMAIN, DEFAULT_NAME).schema
-).extend(
+    make_template_entity_common_schema(CLIMATE_DOMAIN, DEFAULT_NAME).schema).extend(
     {
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
         vol.Optional(CONF_ICON_TEMPLATE): cv.template,
