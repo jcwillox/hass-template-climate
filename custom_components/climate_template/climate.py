@@ -82,7 +82,7 @@ from homeassistant.helpers import template
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.reload import async_setup_reload_service
-from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
@@ -267,6 +267,16 @@ async def async_setup_platform(
         )
 
 
+class LastActiveModeData(ExtraStoredData):
+    """Last non-off hvac mode, restored across restarts."""
+
+    def __init__(self, hvac_mode: str | None) -> None:
+        self.hvac_mode = hvac_mode
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"last_active_hvac_mode": self.hvac_mode}
+
+
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     """A template climate component."""
 
@@ -293,6 +303,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_fan_mode = FAN_LOW
         self._attr_preset_mode = PRESET_COMFORT
         self._attr_hvac_mode = HVACMode.OFF
+        self._last_active_hvac_mode: HVACMode | None = None
         self._attr_swing_mode = HVACMode.OFF
         self._attr_target_temperature = DEFAULT_TEMP
         self._attr_target_temperature_high = None
@@ -403,6 +414,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
             if previous_state.state in self._attr_hvac_modes:
                 self._attr_hvac_mode = HVACMode(previous_state.state)
+                self._remember_active_mode(self._attr_hvac_mode)
 
             if (
                 temperature := previous_state.attributes.get(ATTR_TEMPERATURE)
@@ -438,6 +450,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
             if humidity := previous_state.attributes.get(ATTR_HUMIDITY):
                 self._attr_target_humidity = humidity
+
+        if (extra := await self.async_get_last_extra_data()) is not None:
+            self._remember_active_mode(extra.as_dict().get("last_active_hvac_mode"))
 
     @callback
     def _async_setup_templates(self) -> None:
@@ -680,6 +695,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def _update_hvac_mode(self, hvac_mode):
         if hvac_mode in self._attr_hvac_modes:
             hvac_mode = HVACMode(hvac_mode) if hvac_mode else None
+            self._remember_active_mode(hvac_mode)
             if self._attr_hvac_mode != hvac_mode:  # Only update if there's a change
                 self._attr_hvac_mode = hvac_mode
                 self.async_write_ha_state()  # Update HA state without triggering an action
@@ -771,8 +787,28 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             else None
         )
 
+    def _remember_active_mode(self, hvac_mode: str | None) -> None:
+        if (
+            hvac_mode
+            and hvac_mode != HVACMode.OFF
+            and hvac_mode in self._attr_hvac_modes
+        ):
+            self._last_active_hvac_mode = HVACMode(hvac_mode)
+
+    @property
+    def extra_restore_state_data(self) -> LastActiveModeData:
+        return LastActiveModeData(self._last_active_hvac_mode)
+
+    async def async_turn_on(self) -> None:
+        """Turn on in the last active mode instead of always heat."""
+        if self._last_active_hvac_mode is None:
+            await super().async_turn_on()
+            return
+        await self.async_set_hvac_mode(self._last_active_hvac_mode)
+
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new operation mode."""
+        self._remember_active_mode(hvac_mode)
         if self._hvac_mode_template is None:
             self._attr_hvac_mode = hvac_mode  # always optimistic
             self.async_write_ha_state()
