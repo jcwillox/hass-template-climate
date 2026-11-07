@@ -284,7 +284,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_min_temp = config[CONF_TEMP_MIN]
         self._attr_max_temp = config[CONF_TEMP_MAX]
         self._attr_target_temperature_step = config[CONF_TEMP_STEP]
-        self._attr_temperature_unit = hass.config.units.temperature_unit
+        self._attr_native_temperature_unit = hass.config.units.temperature_unit
         self._attr_hvac_modes = config[CONF_MODE_LIST]
         self._attr_fan_modes = config[CONF_FAN_MODE_LIST]
         self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
@@ -294,9 +294,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_preset_mode = PRESET_COMFORT
         self._attr_hvac_mode = HVACMode.OFF
         self._attr_swing_mode = HVACMode.OFF
-        self._attr_target_temperature = DEFAULT_TEMP
-        self._attr_target_temperature_high = None
-        self._attr_target_temperature_low = None
+        self._attr_native_current_temperature = None
+        self._attr_native_target_temperature = DEFAULT_TEMP
+        self._attr_native_target_temperature_high = None
+        self._attr_native_target_temperature_low = None
 
         if (precision := config.get(CONF_PRECISION)) is not None:
             self._attr_precision = precision
@@ -407,12 +408,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if (
                 temperature := previous_state.attributes.get(ATTR_TEMPERATURE)
             ) is not None:
-                self._attr_target_temperature = float(temperature)
+                self._attr_native_target_temperature = float(temperature)
                 
             if temperature_high := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH):
-                self._attr_target_temperature_high = float(temperature_high)
+                self._attr_native_target_temperature_high = float(temperature_high)
             if temperature_low := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW):
-                self._attr_target_temperature_low = float(temperature_low)
+                self._attr_native_target_temperature_low = float(temperature_low)
 
             self._attr_fan_mode = previous_state.attributes.get(ATTR_FAN_MODE, FAN_LOW)
             self._attr_preset_mode = previous_state.attributes.get(
@@ -425,7 +426,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             if current_temperature := previous_state.attributes.get(
                 ATTR_CURRENT_TEMPERATURE
             ):
-                self._attr_current_temperature = float(current_temperature)
+                self._attr_native_current_temperature = float(current_temperature)
 
             if humidity := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY):
                 self._attr_current_humidity = humidity
@@ -462,7 +463,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         if self._current_temp_template:
             self.add_template_attribute(
-                "_attr_current_temperature",
+                "_attr_native_current_temperature",
                 self._current_temp_template,
                 None,
                 self._update_current_temp,
@@ -507,7 +508,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         if self._target_temperature_template:
             self.add_template_attribute(
-                "_attr_target_temperature",
+                "_attr_native_target_temperature",
                 self._target_temperature_template,
                 None,
                 self._update_target_temp,
@@ -516,7 +517,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         if self._target_temperature_high_template:
             self.add_template_attribute(
-                "_attr_target_temperature_high",
+                "_attr_native_target_temperature_high",
                 self._target_temperature_high_template,
                 None,
                 self._update_target_temp_high,
@@ -525,7 +526,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         if self._target_temperature_low_template:
             self.add_template_attribute(
-                "_attr_target_temperature_low",
+                "_attr_native_target_temperature_low",
                 self._target_temperature_low_template,
                 None,
                 self._update_target_temp_low,
@@ -597,7 +598,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def _update_current_temp(self, temp):
         if temp not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
-                self._attr_current_temperature = float(temp)
+                self._attr_native_current_temperature = float(temp)
             except ValueError:
                 _LOGGER.error("Could not parse temperature from %s", temp)
 
@@ -645,9 +646,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp = float(temp)
                 if (
-                    new_target_temp != self._attr_target_temperature
+                    new_target_temp != self._attr_native_target_temperature
                 ):  # Only update if there's a change
-                    self._attr_target_temperature = new_target_temp
+                    self._attr_native_target_temperature = new_target_temp
                     self.async_write_ha_state()  # Update the HA state without triggering an action
             except ValueError:
                 _LOGGER.error("Could not parse temperature from %s", temp)
@@ -658,8 +659,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             try:
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp_high = float(temp)
-                if new_target_temp_high != self._attr_target_temperature_high:
-                    self._attr_target_temperature_high = new_target_temp_high
+                if new_target_temp_high != self._attr_native_target_temperature_high:
+                    self._attr_native_target_temperature_high = new_target_temp_high
                     self.async_write_ha_state()
             except ValueError:
                 _LOGGER.error("Could not parse temperature high from %s", temp)
@@ -670,8 +671,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             try:
                 # Update the internal state without triggering the set_temperature action
                 new_target_temp_low = float(temp)
-                if new_target_temp_low != self._attr_target_temperature_low:
-                    self._attr_target_temperature_low = new_target_temp_low
+                if new_target_temp_low != self._attr_native_target_temperature_low:
+                    self._attr_native_target_temperature_low = new_target_temp_low
                     self.async_write_ha_state()
             except ValueError:
                 _LOGGER.error("Could not parse temperature low from %s", temp)
@@ -745,31 +746,47 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
 
     @property
-    def target_temperature(self):
+    def native_target_temperature(self):
         """Return the temperature we try to reach."""
         return (
-            self._attr_target_temperature
+            self._attr_native_target_temperature
             if self._attr_hvac_mode != HVACMode.HEAT_COOL
             else None
         )
 
     @property
-    def target_temperature_high(self):
+    def native_target_temperature_high(self):
         """Return the temperature high we try to reach."""
         return (
-            self._attr_target_temperature_high
+            self._attr_native_target_temperature_high
             if self._attr_hvac_mode == HVACMode.HEAT_COOL
             else None
         )
 
     @property
-    def target_temperature_low(self):
+    def native_target_temperature_low(self):
         """Return the temperature low we try to reach."""
         return (
-            self._attr_target_temperature_low
+            self._attr_native_target_temperature_low
             if self._attr_hvac_mode == HVACMode.HEAT_COOL
             else None
         )
+
+    if not hasattr(ClimateEntity, "native_temperature_unit"):
+        # Older Core releases read the legacy properties.
+        target_temperature = native_target_temperature
+        target_temperature_high = native_target_temperature_high
+        target_temperature_low = native_target_temperature_low
+
+        @property
+        def temperature_unit(self):
+            """Return the temperature unit on older Core releases."""
+            return self._attr_native_temperature_unit
+
+        @property
+        def current_temperature(self):
+            """Return the current temperature on older Core releases."""
+            return self._attr_native_current_temperature
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new operation mode."""
@@ -834,20 +851,23 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
             if (
                 high_temp is not None
-                and high_temp != self._attr_target_temperature_high
+                and high_temp != self._attr_native_target_temperature_high
             ):
-                self._attr_target_temperature_high = high_temp
+                self._attr_native_target_temperature_high = high_temp
                 updated = True
 
-            if low_temp is not None and low_temp != self._attr_target_temperature_low:
-                self._attr_target_temperature_low = low_temp
+            if (
+                low_temp is not None
+                and low_temp != self._attr_native_target_temperature_low
+            ):
+                self._attr_native_target_temperature_low = low_temp
                 updated = True
 
         else:
             # Explicitly update single target temperature if provided
             temp = kwargs.get(ATTR_TEMPERATURE)
-            if temp is not None and temp != self._attr_target_temperature:
-                self._attr_target_temperature = temp
+            if temp is not None and temp != self._attr_native_target_temperature:
+                self._attr_native_target_temperature = temp
                 updated = True
 
         # Update Home Assistant state if any changes occurred
